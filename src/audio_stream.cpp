@@ -22,7 +22,7 @@ AudioStreamContext::AudioStreamContext(
     audio_buffer = std::make_unique<std::atomic<int16_t>[]>(buffer_capacity);
 
     // Initialize all elements to 0
-    for (size_t i = 0; i < buffer_capacity; i++) {
+    for (int i = 0; i < buffer_capacity; i++) {
         audio_buffer[i].store(0, std::memory_order_relaxed);
     }
 }
@@ -30,7 +30,7 @@ AudioStreamContext::AudioStreamContext(
 void AudioStreamContext::write_sample(int16_t sample) {
     // Find current index of circular buffer
     uint64_t pos = total_samples_written.load(std::memory_order_relaxed);
-    size_t index = pos % buffer_capacity;
+    int index = pos % buffer_capacity;
 
     audio_buffer[index].store(sample, std::memory_order_relaxed);
 

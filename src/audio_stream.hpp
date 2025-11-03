@@ -12,8 +12,8 @@ namespace microphone {
 
 namespace vsdk = ::viam::sdk;
 
-constexpr int BUFFER_DURATION_SECONDS = 10;  // How much audio history to keep
-constexpr double CHUNK_DURATION_SECONDS = 0.1;       // 100ms chunks (10 chunks per second)
+constexpr int BUFFER_DURATION_SECONDS = 10;  // How much audio history to keep in buffer
+constexpr double CHUNK_DURATION_SECONDS = 0.1;   // 100ms chunks (10 chunks per second)
 
 
 // AudioStreamContext managers a circular buffer of audio for a single
@@ -22,7 +22,7 @@ constexpr double CHUNK_DURATION_SECONDS = 0.1;       // 100ms chunks (10 chunks 
 // the get_audio calls (readers)
 struct AudioStreamContext {
     std::unique_ptr<std::atomic<int16_t>[]> audio_buffer;
-    size_t buffer_capacity;
+    int buffer_capacity;
 
     vsdk::audio_info info;
     int samples_per_chunk;

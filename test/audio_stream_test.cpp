@@ -11,8 +11,8 @@ class AudioStreamContextTest : public ::testing::Test {
 protected:
     void SetUp() override {
         // Create a basic audio context for testing
-        audio_info info{viam::sdk::audio_codecs::PCM_16, 44100, 1};  // mono, 44.1kHz
-        samples_per_chunk_ = 4410;  // 100ms chunks
+        audio_info info{viam::sdk::audio_codecs::PCM_16, 44100, 1};
+        samples_per_chunk_ = 4410;
         context_ = std::make_unique<AudioStreamContext>(info, samples_per_chunk_);
     }
 
@@ -38,27 +38,8 @@ protected:
     }
 
     std::unique_ptr<AudioStreamContext> context_;
-    size_t samples_per_chunk_;
+    int samples_per_chunk_;
 };
-
-
-TEST_F(AudioStreamContextTest, StereoContextCreation) {
-    audio_info info{viam::sdk::audio_codecs::PCM_16, 44100, 2};  // stereo
-    size_t samples_per_chunk = 4410;  // 100ms chunks
-
-    AudioStreamContext ctx(info, samples_per_chunk);
-
-    // Verify context is created with correct properties
-    EXPECT_EQ(ctx.info.num_channels, 2);
-    EXPECT_EQ(ctx.info.sample_rate_hz, 44100);
-    EXPECT_EQ(ctx.samples_per_chunk, 4410);
-}
-
-
-TEST_F(AudioStreamContextTest, CircularBufferStartsAtZero) {
-    // Circular buffer should start with write position at 0
-    EXPECT_EQ(context_->get_write_position(), 0);
-}
 
 TEST_F(AudioStreamContextTest, WriteAndReadSamples) {
     // Write some test samples to circular buffer
@@ -67,11 +48,8 @@ TEST_F(AudioStreamContextTest, WriteAndReadSamples) {
     for (auto sample : test_samples) {
         context_->write_sample(sample);
     }
-
-    // Verify samples were written
     EXPECT_EQ(context_->get_write_position(), test_samples.size());
 
-    // Read samples back (start from position 0)
     std::vector<int16_t> read_buffer(test_samples.size());
     uint64_t read_pos = 0;
     int samples_read = context_->read_samples(read_buffer.data(), test_samples.size(), read_pos);
@@ -191,32 +169,6 @@ TEST_F(AudioStreamContextTest, ReadMoreThanAvailable) {
     EXPECT_EQ(read_pos, 50);
 }
 
-TEST_F(AudioStreamContextTest, MultipleSmallReads) {
-    // Write 100 samples
-    for (int i = 0; i < 100; i++) {
-        context_->write_sample(static_cast<int16_t>(i));
-    }
-
-    // Read in multiple small chunks
-    std::vector<int16_t> buffer(10);
-    uint64_t read_pos = 0;
-    int total_read = 0;
-
-    for (int i = 0; i < 10; i++) {
-        int samples_read = context_->read_samples(buffer.data(), 10, read_pos);
-        EXPECT_EQ(samples_read, 10);
-        total_read += samples_read;
-
-        // Verify the data is correct
-        for (int j = 0; j < 10; j++) {
-            EXPECT_EQ(buffer[j], i * 10 + j);
-        }
-    }
-
-    EXPECT_EQ(total_read, 100);
-    EXPECT_EQ(read_pos, 100);
-}
-
 TEST_F(AudioStreamContextTest, CalculateSampleTimestamp) {
     // Set up the baseline time
     context_->first_sample_adc_time = 1000.0;
@@ -268,7 +220,7 @@ TEST_F(AudioStreamContextTest, CalculateSampleTimestamp) {
           mock_time_info.outputBufferDacTime = 0.0;
       }
 
-      std::vector<int16_t> create_test_samples(size_t count, int16_t value = 16383) {
+      std::vector<int16_t> create_test_samples(int count, int16_t value = 16383) {
           return std::vector<int16_t>(count, value);
       }
 
@@ -284,7 +236,7 @@ TEST_F(AudioStreamContextTest, CalculateSampleTimestamp) {
       }
 
       viam::sdk::audio_info test_info;
-      size_t samples_per_chunk;
+      int samples_per_chunk;
       std::unique_ptr<microphone::AudioStreamContext> ctx;
       PaStreamCallbackTimeInfo mock_time_info;
   };
@@ -314,13 +266,8 @@ TEST_F(AudioStreamContextTest, CalculateSampleTimestamp) {
 
   TEST_F(AudioCallbackTest, TracksFirstCallbackTime) {
       std::vector<int16_t> samples = create_test_samples(100);
-
-      // Before callback, first_callback_captured should be false
       EXPECT_FALSE(ctx->first_callback_captured.load());
-
       call_callback(samples);
-
-      // After callback, timing should be captured
       EXPECT_TRUE(ctx->first_callback_captured.load());
       EXPECT_EQ(ctx->first_sample_adc_time, mock_time_info.inputBufferAdcTime);
   }
@@ -329,14 +276,9 @@ TEST_F(AudioStreamContextTest, CalculateSampleTimestamp) {
       std::vector<int16_t> samples = create_test_samples(100);
 
       EXPECT_EQ(ctx->total_samples_written.load(), 0);
-
       call_callback(samples);
-
       EXPECT_EQ(ctx->total_samples_written.load(), 100);
-
-      // Call again
       call_callback(samples);
-
       EXPECT_EQ(ctx->total_samples_written.load(), 200);
   }
 

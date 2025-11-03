@@ -200,7 +200,7 @@ void Microphone::get_audio(std::string const& codec,
     // Get sample rate and channels - will be updated if context changes
     int stream_sample_rate;
     int stream_num_channels;
-    size_t samples_per_chunk;
+    int samples_per_chunk;
 
     {
         std::lock_guard<std::mutex> lock(stream_ctx_mu_);
@@ -226,7 +226,6 @@ void Microphone::get_audio(std::string const& codec,
                     stream_sample_rate = sample_rate_;
                     stream_num_channels = num_channels_;
                     samples_per_chunk = (stream_sample_rate * CHUNK_DURATION_SECONDS) * stream_num_channels;
-
                     read_position = current_context->get_write_position();
                 }
                 stream_context = current_context;
@@ -237,6 +236,9 @@ void Microphone::get_audio(std::string const& codec,
         // Check if we have enough samples for a full chunk
         uint64_t write_pos = current_context->get_write_position();
         uint64_t available_samples = write_pos - read_position;
+
+
+        VIAM_SDK_LOG(info) << "avaliable samples: " << available_samples;
 
         // Wait until we have a full chunk worth of samples
         if (available_samples < samples_per_chunk) {
