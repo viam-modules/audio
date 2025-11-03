@@ -1,11 +1,12 @@
 # Module audio
 
-This module utilizes portaudio to record and output audio.
+This [Viam module](https://docs.viam.com/registry/) provides audio input and output capabilities using the [PortAudio](http://www.portaudio.com/) library. It can capture and play audio from microphones and speakers on your machine.
+
 
 ## Supported Platforms
 - **Darwin ARM64**
-- **Linux x64**:
-- **Linux ARM64**:
+- **Linux x64**
+- **Linux ARM64**
 
 ## Model viam:audio:microphone
 
@@ -22,7 +23,7 @@ The following attribute template can be used to configure this model:
 ```
 #### Configuration Attributes
 
-The following attributes are available for the Astra 2 model:
+The following attributes are available for the `viam:audio:microphone` model:
 
 | Name          | Type   | Inclusion | Description                |
 |---------------|--------|-----------|----------------------------|
