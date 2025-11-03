@@ -3,3 +3,6 @@ build/
 venv/
 CMakeUserPresets.json
 build-conan/
+module.tar.gz
+audio-module
+settings.json
