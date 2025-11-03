@@ -8,9 +8,6 @@ set -euxo pipefail
 
 OS=$(uname -s | tr '[:upper:]' '[:lower:]')
 
-
-
-
 # NOTE: this is written under the assumption that it will be built in canon
 
 if [[ ${OS} == "darwin" ]]; then
@@ -22,9 +19,8 @@ if [[ ${OS} == "darwin" ]]; then
   brew install portaudio
 
 elif  [[ ${OS} == "linux" ]]; then
-    sudo apt -y update && sudo apt -y upgrade && sudo apt-get install -y libasound-dev portaudio19-dev python3.11-venv cmake
+    sudo apt -y update && sudo apt -y upgrade && sudo apt-get install -y libasound-dev portaudio19-dev python3-venv cmake
 fi
-
 
 if [ ! -f "./venv/bin/activate" ]; then
   echo 'creating and sourcing virtual env'
@@ -43,7 +39,7 @@ fi
 conan profile detect || echo "Conan is already installed"
 
 # Use local viam-cpp-sdk instead of cloning
-pushd /host/viam-cpp-sdk
+pushd ~/viam-cpp-sdk
 
 # Pull latest changes
 git pull || echo "Could not pull, continuing with current state"

@@ -42,177 +42,127 @@ protected:
 };
 
 
-TEST_F(AudioStreamContextTest, ConstructorInitializesCorrectly) {
-    EXPECT_EQ(context_->samples_per_chunk, samples_per_chunk_);
-    EXPECT_EQ(context_->current_sample_count, 0);
-    EXPECT_TRUE(context_->is_recording.load());
-    // Working buffer size = samples_per_chunk * num_channels (1 for mono)
-    EXPECT_EQ(context_->working_buffer.size(), samples_per_chunk_ * context_->info.num_channels);
-    EXPECT_EQ(context_->history_buffer.size(), 100);  // default capacity
-}
-
-TEST_F(AudioStreamContextTest, ConstructorWithCustomHistoryCapacity) {
-    audio_info info{viam::sdk::audio_codecs::PCM_16, 44100, 1};
-    size_t custom_capacity = 50;
-
-    AudioStreamContext ctx(info, 4410, custom_capacity);
-
-    EXPECT_EQ(ctx.history_capacity, custom_capacity);
-    EXPECT_EQ(ctx.history_buffer.size(), custom_capacity);
-}
-
-TEST_F(AudioStreamContextTest, StereoBufferSizeCorrect) {
+TEST_F(AudioStreamContextTest, StereoContextCreation) {
     audio_info info{viam::sdk::audio_codecs::PCM_16, 44100, 2};  // stereo
     size_t samples_per_chunk = 4410;  // 100ms chunks
 
     AudioStreamContext ctx(info, samples_per_chunk);
 
-    // Working buffer should account for 2 channels (interleaved)
-    EXPECT_EQ(ctx.working_buffer.size(), samples_per_chunk * 2);
+    // Verify context is created with correct properties
     EXPECT_EQ(ctx.info.num_channels, 2);
+    EXPECT_EQ(ctx.info.sample_rate_hz, 44100);
+    EXPECT_EQ(ctx.samples_per_chunk, 4410);
+    EXPECT_TRUE(ctx.is_recording.load());
 }
 
 
-TEST_F(AudioStreamContextTest, PushChunkSucceeds) {
-    auto chunk = CreateTestChunk(1);
-
-    // Push should not throw
-    EXPECT_NO_THROW(context_->push_chunk(std::move(chunk)));
+TEST_F(AudioStreamContextTest, CircularBufferStartsAtZero) {
+    // Circular buffer should start with write position at 0
+    EXPECT_EQ(context_->get_write_position(), 0);
 }
 
-TEST_F(AudioStreamContextTest, GetNewChunksReturnsEmpty) {
-    auto chunks = context_->get_new_chunks();
+TEST_F(AudioStreamContextTest, WriteAndReadSamples) {
+    // Write some test samples to circular buffer
+    std::vector<int16_t> test_samples = {100, 200, 300, 400, 500};
 
-    EXPECT_TRUE(chunks.empty());
-}
-
-TEST_F(AudioStreamContextTest, PushAndPopSingleChunk) {
-    auto chunk = CreateTestChunk(1, 1000000);  // 1ms timestamp
-    context_->push_chunk(std::move(chunk));
-
-    auto chunks = context_->get_new_chunks();
-
-    ASSERT_EQ(chunks.size(), 1);
-    EXPECT_EQ(chunks[0].start_timestamp_ns.count(), 1000000);
-}
-
-TEST_F(AudioStreamContextTest, GetNewChunksEmptiesQueue) {
-    // Push 3 chunks
-    for (int i = 0; i < 3; i++) {
-        context_->push_chunk(CreateTestChunk(i));
+    for (auto sample : test_samples) {
+        context_->write_sample(sample);
     }
 
-    // First call gets all chunks
-    auto chunks1 = context_->get_new_chunks();
-    EXPECT_EQ(chunks1.size(), 3);
+    // Verify samples were written
+    EXPECT_EQ(context_->get_write_position(), test_samples.size());
 
-    // Second call should be empty
-    auto chunks2 = context_->get_new_chunks();
-    EXPECT_TRUE(chunks2.empty());
+    // Read samples back (start from position 0)
+    std::vector<int16_t> read_buffer(test_samples.size());
+    uint64_t read_pos = 0;
+    int samples_read = context_->read_samples(read_buffer.data(), test_samples.size(), read_pos);
+
+    EXPECT_EQ(samples_read, test_samples.size());
+    EXPECT_EQ(read_pos, test_samples.size());  // Position should have advanced
+    EXPECT_EQ(read_buffer, test_samples);
 }
 
-
-TEST_F(AudioStreamContextTest, HistoryBufferStoresChunks) {
-    // Push a chunk
-    auto chunk = CreateTestChunk(42, 5000000);
-    context_->push_chunk(std::move(chunk));
-
-    // Pop it (which adds to history)
-    context_->get_new_chunks();
-
-    // Query from history
-    auto history_chunks = context_->get_chunks_from_timestamp(0, INT64_MAX);
-
-    ASSERT_EQ(history_chunks.size(), 1);
-}
-
-TEST_F(AudioStreamContextTest, GetChunksFromTimestampFiltersCorrectly) {
-    // Push chunks at different timestamps
-    context_->push_chunk(CreateTestChunk(1, 1000000000));   // 1 second
-    context_->push_chunk(CreateTestChunk(2, 2000000000));   // 2 seconds
-    context_->push_chunk(CreateTestChunk(3, 3000000000));   // 3 seconds
-
-    // Get all chunks into history
-    context_->get_new_chunks();
-
-    // Query for chunks between 1.5s and 2.5s
-    auto chunks = context_->get_chunks_from_timestamp(1500000000, 2500000000);
-
-    ASSERT_EQ(chunks.size(), 1);
-}
-
-TEST_F(AudioStreamContextTest, GetChunksFromTimestampWithDefaultEndTime) {
-    context_->push_chunk(CreateTestChunk(1, 1000000000));
-    context_->push_chunk(CreateTestChunk(2, 2000000000));
-
-    context_->get_new_chunks();
-
-    // Query from 1.5s to end (default INT64_MAX)
-    auto chunks = context_->get_chunks_from_timestamp(1500000000);
-
-    ASSERT_EQ(chunks.size(), 1);
-}
-
-TEST_F(AudioStreamContextTest, GetAvailableTimeRangeReturnsCorrectRange) {
-    // Push chunks at different times
-    context_->push_chunk(CreateTestChunk(1, 1000000000));   // Start: 1s
-    context_->push_chunk(CreateTestChunk(2, 2000000000));   // Start: 2s
-    context_->push_chunk(CreateTestChunk(3, 3000000000));   // Start: 3s, End: 3.1s
-
-    context_->get_new_chunks();
-
-    auto range = context_->get_available_time_range();
-
-    EXPECT_EQ(range.first, 1000000000);      // Oldest start
-    EXPECT_EQ(range.second, 3100000000);     // Newest end (3s + 100ms)
-}
-
-TEST_F(AudioStreamContextTest, GetAvailableTimeRangeEmptyReturnsZero) {
-    auto range = context_->get_available_time_range();
-
-    EXPECT_EQ(range.first, 0);
-    EXPECT_EQ(range.second, 0);
-}
-
-
-TEST_F(AudioStreamContextTest, HistoryBufferWrapsAround) {
-    audio_info info{viam::sdk::audio_codecs::PCM_16, 44100, 1};
-    size_t small_capacity = 5;
-    AudioStreamContext ctx(info, 4410, small_capacity);
-
-    // Push more chunks than capacity
-    for (int i = 0; i < 10; i++) {
-        ctx.push_chunk(CreateTestChunk(i, i * 100000000));
+TEST_F(AudioStreamContextTest, MultipleReadersIndependent) {
+    // Write samples to circular buffer
+    const int num_samples = 100;
+    for (int i = 0; i < num_samples; i++) {
+        context_->write_sample(static_cast<int16_t>(i));
     }
 
-    ctx.get_new_chunks();
+    EXPECT_EQ(context_->get_write_position(), num_samples);
 
-    // Should only have the last 5 chunks in history
-    auto chunks = ctx.get_chunks_from_timestamp(0, INT64_MAX);
+    // Reader 1: Reads all samples
+    std::vector<int16_t> buffer1(num_samples);
+    uint64_t read_pos1 = 0;
+    int samples_read1 = context_->read_samples(buffer1.data(), num_samples, read_pos1);
+    EXPECT_EQ(samples_read1, num_samples);
+    EXPECT_EQ(read_pos1, num_samples);
 
-    ASSERT_EQ(chunks.size(), 5);
+    // Reader 2: Can also read the same samples (independent position)
+    std::vector<int16_t> buffer2(num_samples);
+    uint64_t read_pos2 = 0;
+    int samples_read2 = context_->read_samples(buffer2.data(), num_samples, read_pos2);
+    EXPECT_EQ(samples_read2, num_samples);
+    EXPECT_EQ(read_pos2, num_samples);
+
+    // Both readers got the same data
+    EXPECT_EQ(buffer1, buffer2);
 }
 
-TEST_F(AudioStreamContextTest, ConcurrentPushAndPop) {
+
+TEST_F(AudioStreamContextTest, ReadPartialSamples) {
+    // Write 100 samples
+    const int num_samples = 100;
+    for (int i = 0; i < num_samples; i++) {
+        context_->write_sample(static_cast<int16_t>(i));
+    }
+
+    // Read only 50 samples
+    std::vector<int16_t> buffer(50);
+    uint64_t read_pos = 0;
+    int samples_read = context_->read_samples(buffer.data(), 50, read_pos);
+
+    EXPECT_EQ(samples_read, 50);
+    EXPECT_EQ(read_pos, 50);  // Position advanced to 50
+
+    // Read remaining 50 (continue from position 50)
+    samples_read = context_->read_samples(buffer.data(), 50, read_pos);
+    EXPECT_EQ(samples_read, 50);
+    EXPECT_EQ(read_pos, 100);  // Position now at 100
+}
+
+TEST_F(AudioStreamContextTest, ConcurrentWriteAndRead) {
     std::atomic<bool> stop{false};
-    std::atomic<int> pushed{0};
-    std::atomic<int> popped{0};
+    std::atomic<int> read_total{0};
+
+    const int total_samples = 1000;
 
     // Producer thread (simulates RT audio callback)
     std::thread producer([&]() {
-        for (int i = 0; i < 100; i++) {
-            context_->push_chunk(CreateTestChunk(i));
-            pushed++;
-            std::this_thread::sleep_for(std::chrono::microseconds(100));
+        for (int i = 0; i < total_samples; i++) {
+            context_->write_sample(static_cast<int16_t>(i));
+            std::this_thread::sleep_for(std::chrono::microseconds(10));
         }
     });
 
     // Consumer thread (simulates get_audio)
     std::thread consumer([&]() {
-        while (!stop.load() || pushed.load() > popped.load()) {
-            auto chunks = context_->get_new_chunks();
-            popped += chunks.size();
-            std::this_thread::sleep_for(std::chrono::microseconds(500));
+        std::vector<int16_t> buffer(100);
+        uint64_t my_read_pos = 0;
+
+        // Keep reading until stopped AND all samples consumed
+        while (!stop.load() || my_read_pos < context_->get_write_position()) {
+            uint64_t write_pos = context_->get_write_position();
+            uint64_t available = write_pos - my_read_pos;
+
+            if (available > 0) {
+                int to_read = std::min(available, static_cast<uint64_t>(100));
+                int samples_read = context_->read_samples(buffer.data(), to_read, my_read_pos);
+                read_total += samples_read;
+            } else {
+                // No samples available yet, wait a bit
+                std::this_thread::sleep_for(std::chrono::microseconds(100));
+            }
         }
     });
 
@@ -220,8 +170,8 @@ TEST_F(AudioStreamContextTest, ConcurrentPushAndPop) {
     stop = true;
     consumer.join();
 
-    // All chunks should have been consumed
-    EXPECT_EQ(popped.load(), 100);
+    // All samples should have been read
+    EXPECT_EQ(read_total.load(), total_samples);
 }
 
 TEST_F(AudioStreamContextTest, RecordingFlagCanBeToggled) {
@@ -234,91 +184,71 @@ TEST_F(AudioStreamContextTest, RecordingFlagCanBeToggled) {
     EXPECT_TRUE(context_->is_recording.load());
 }
 
-TEST_F(AudioStreamContextTest, PushChunkAfterMoveStillWorks) {
-    auto chunk1 = CreateTestChunk(1);
-    auto chunk2 = CreateTestChunk(2);
-
-    context_->push_chunk(std::move(chunk1));
-    context_->push_chunk(std::move(chunk2));
-
-    auto chunks = context_->get_new_chunks();
-    EXPECT_EQ(chunks.size(), 2);
-}
-
-TEST_F(AudioStreamContextTest, EmptyAudioDataChunk) {
-    AudioIn::audio_chunk chunk;
-    chunk.audio_data.clear();  // Empty data
-
-    context_->push_chunk(std::move(chunk));
-
-    auto chunks = context_->get_new_chunks();
-    ASSERT_EQ(chunks.size(), 1);
-    EXPECT_TRUE(chunks[0].audio_data.empty());
-}
-
-TEST_F(AudioStreamContextTest, PushPop) {
-    // Queue capacity is 100, so test with chunks that fit
-    const int num_chunks = 90;  // Stay under capacity
-
-    auto start = std::chrono::high_resolution_clock::now();
-
-    // Push many chunks
-    for (int i = 0; i < num_chunks; i++) {
-        context_->push_chunk(CreateTestChunk(i));
+TEST_F(AudioStreamContextTest, ReadMoreThanAvailable) {
+    // Write only 50 samples
+    const int num_samples = 50;
+    for (int i = 0; i < num_samples; i++) {
+        context_->write_sample(static_cast<int16_t>(i));
     }
 
-    // Pop all chunks
-    int total_retrieved = 0;
-    while (true) {
-        auto chunks = context_->get_new_chunks();
-        if (chunks.empty()) break;
-        total_retrieved += chunks.size();
-    }
+    // Try to read 100 samples
+    std::vector<int16_t> buffer(100);
+    uint64_t read_pos = 0;
+    int samples_read = context_->read_samples(buffer.data(), 100, read_pos);
 
-    auto end = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-
-    EXPECT_EQ(total_retrieved, num_chunks);
-
-    // Should complete in reasonable time (< 100ms on modern hardware)
-    EXPECT_LT(duration.count(), 100) << "Performance test took " << duration.count() << "ms";
+    // Should only get the 50 available samples
+    EXPECT_EQ(samples_read, 50);
+    EXPECT_EQ(read_pos, 50);
 }
 
-TEST_F(AudioStreamContextTest, QueueDropsChunksWhenFull) {
-    // Queue capacity is 100 - test that pushing beyond capacity doesn't crash
-    const int num_chunks = 150;  // Push more than capacity
-
-    // Push chunks
-    for (int i = 0; i < num_chunks; i++) {
-        context_->push_chunk(CreateTestChunk(i));
+TEST_F(AudioStreamContextTest, MultipleSmallReads) {
+    // Write 100 samples
+    for (int i = 0; i < 100; i++) {
+        context_->write_sample(static_cast<int16_t>(i));
     }
 
-    // Pop all chunks - should get at most 100
-    auto chunks = context_->get_new_chunks();
+    // Read in multiple small chunks
+    std::vector<int16_t> buffer(10);
+    uint64_t read_pos = 0;
+    int total_read = 0;
 
-    EXPECT_LE(chunks.size(), 100) << "Queue should not hold more than capacity";
-    EXPECT_GT(chunks.size(), 0) << "Should have retrieved some chunks";
+    for (int i = 0; i < 10; i++) {
+        int samples_read = context_->read_samples(buffer.data(), 10, read_pos);
+        EXPECT_EQ(samples_read, 10);
+        total_read += samples_read;
+
+        // Verify the data is correct
+        for (int j = 0; j < 10; j++) {
+            EXPECT_EQ(buffer[j], i * 10 + j);
+        }
+    }
+
+    EXPECT_EQ(total_read, 100);
+    EXPECT_EQ(read_pos, 100);
 }
 
 TEST_F(AudioStreamContextTest, CalculateSampleTimestamp) {
     // Set up the baseline time
-    context_->first_callback_adc_time = 1000.0;
+    context_->first_sample_adc_time = 1000.0;
     context_->stream_start_time = std::chrono::system_clock::now();
     context_->first_callback_captured.store(true);
+    context_->total_samples_written.store(0);
 
     auto baseline_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
         context_->stream_start_time.time_since_epoch()
     ).count();
 
-    auto timestamp1 = calculate_sample_timestamp(context_.get(), 0.0, 0);
+    // Test timestamp for sample 0
+    auto timestamp1 = calculate_sample_timestamp(context_.get(), 0);
     EXPECT_EQ(timestamp1.count(), baseline_ns);
 
-    auto timestamp2 = calculate_sample_timestamp(context_.get(), 1.0, 0);
-    EXPECT_EQ(timestamp2.count(), baseline_ns + 1'000'000'000);
+    // Test timestamp for sample at 1 second (44100 samples at 44.1kHz)
+    auto timestamp2 = calculate_sample_timestamp(context_.get(), 44100);
+    EXPECT_NEAR(timestamp2.count(), baseline_ns + 1'000'000'000, 1000);  // ~1 second
 
-    // Test 3: Sample offset at 44100 Hz (1 sample = ~22.676 µs)
-    auto timestamp3 = calculate_sample_timestamp(context_.get(), 0.0, 44100);
-    EXPECT_NEAR(timestamp3.count(), baseline_ns + 1'000'000'000, 1000);  // ~1 second
+    // Test timestamp for sample at 0.5 seconds (22050 samples)
+    auto timestamp3 = calculate_sample_timestamp(context_.get(), 22050);
+    EXPECT_NEAR(timestamp3.count(), baseline_ns + 500'000'000, 1000);  // ~0.5 seconds
 }
 
 int main(int argc, char **argv) {

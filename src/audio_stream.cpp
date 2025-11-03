@@ -5,185 +5,113 @@
 
 namespace microphone {
 
-
-AudioStreamContext::AudioStreamContext(const vsdk::audio_info& audio_info,
-                                       size_t samples_per_chunk,
-                                       size_t history_capacity)
-    : history_write_index(0)
-    , history_capacity(history_capacity)
-    , info(audio_info)
+AudioStreamContext::AudioStreamContext(
+    const vsdk::audio_info& audio_info,
+    int samples_per_chunk,
+    int buffer_duration_seconds)
+    : info(audio_info)
     , samples_per_chunk(samples_per_chunk)
-    , current_sample_count(0)
-    , current_chunk_start_ns(0)
-    , first_callback_adc_time(0.0)
+    , first_sample_adc_time(0.0)
     , first_callback_captured(false)
+    , total_samples_written(0)
     , is_recording(true)
 {
-    // Pre-allocate working buffer for all channels (interleaved)
-    working_buffer.resize(samples_per_chunk * audio_info.num_channels);
-    history_buffer.resize(history_capacity);  // Pre-allocate history buffer
-    // Note: stream_start_time will be set at first callback to anchor PA time to wall-clock time
+    // Pre-allocate circular buffer for N seconds of audio
+    buffer_capacity = audio_info.sample_rate_hz * audio_info.num_channels * buffer_duration_seconds;
+
+    // Allocate atomic buffer
+    audio_buffer = std::make_unique<std::atomic<int16_t>[]>(buffer_capacity);
+
+    // Initialize all elements to 0
+    for (size_t i = 0; i < buffer_capacity; i++) {
+        audio_buffer[i].store(0, std::memory_order_relaxed);
+    }
 }
 
-std::vector<vsdk::AudioIn::audio_chunk> AudioStreamContext::get_new_chunks() {
-    std::vector<vsdk::AudioIn::audio_chunk> result;
+void AudioStreamContext::write_sample(int16_t sample) {
+    // Find current index of circular buffer
+    uint64_t pos = total_samples_written.load(std::memory_order_relaxed);
+    size_t index = pos % buffer_capacity;
 
-    // Pop all available chunks from lock-free queue
-    vsdk::AudioIn::audio_chunk chunk;
-    while (lockfree_queue.pop(chunk)) {
-        // Add to history buffer for timestamp queries (with mutex, but not in RT thread)
-        {
-            std::lock_guard<std::mutex> lock(history_mutex);
-            history_buffer[history_write_index] = chunk;
-            history_write_index = (history_write_index + 1) % history_capacity;
-        }
+    audio_buffer[index].store(sample, std::memory_order_relaxed);
 
-        // Add to result
-        result.push_back(std::move(chunk));
-    }
-
-    return result;
+    // The memory_order_release ensures that reader threads that see this
+    // counter value via acquire will also see the sample write above
+    total_samples_written.fetch_add(1, std::memory_order_release);
 }
 
-std::vector<vsdk::AudioIn::audio_chunk> AudioStreamContext::get_chunks_from_timestamp(
-    int64_t start_timestamp_ns,
-    int64_t end_timestamp_ns) {
+int AudioStreamContext::read_samples(int16_t* buffer, int sample_count, uint64_t& position) {
+    // memory_order_acquire synronizes with the release in write_sample,
+    // ensuring all samples written up to the current_write_pos are visible
+    uint64_t current_write_pos = total_samples_written.load(std::memory_order_acquire);
 
-    std::lock_guard<std::mutex> lock(history_mutex);
-    std::vector<vsdk::AudioIn::audio_chunk> result;
-
-    // Iterate through history buffer
-    for (size_t i = 0; i < history_capacity; i++) {
-        const auto& chunk = history_buffer[i];
-
-        // Skip uninitialized chunks (timestamp == 0 means empty)
-        if (chunk.start_timestamp_ns.count() == 0) {
-            continue;
-        }
-
-        // Check if chunk is in requested time range
-        if (chunk.start_timestamp_ns.count() >= start_timestamp_ns &&
-            chunk.start_timestamp_ns.count() < end_timestamp_ns) {
-            result.push_back(chunk);  // Copy chunk
-        }
+    // Check if that sample is still in the buffer (not overwritten by new samples)
+    if (current_write_pos > position + buffer_capacity) {
+        // Position has been overwritten, skip to oldest available sample
+        position = current_write_pos - buffer_capacity;
     }
 
-    return result;
+    uint64_t available = current_write_pos - position;
+    int to_read = std::min(static_cast<uint64_t>(sample_count), available);
+
+    for (int i = 0; i < to_read; i++) {
+        int index = (position + i) % buffer_capacity;
+        buffer[i] = audio_buffer[index].load(std::memory_order_relaxed);
+    }
+
+    // update to the new position in the stream
+    position += to_read;
+
+    // return the actual number of samples read
+    return to_read;
 }
 
-std::pair<int64_t, int64_t> AudioStreamContext::get_available_time_range() const {
-    std::lock_guard<std::mutex> lock(const_cast<std::mutex&>(history_mutex));
-
-    int64_t oldest = INT64_MAX;
-    int64_t newest = 0;
-
-    for (size_t i = 0; i < history_capacity; i++) {
-        const auto& chunk = history_buffer[i];
-
-        // Skip uninitialized chunks (timestamp == 0 means empty)
-        if (chunk.start_timestamp_ns.count() == 0) {
-            continue;
-        }
-
-        oldest = std::min(oldest, chunk.start_timestamp_ns.count());
-        newest = std::max(newest, chunk.end_timestamp_ns.count());
-    }
-
-    if (oldest == INT64_MAX) {
-        return {0, 0};  // No data
-    }
-
-    return {oldest, newest};
+uint64_t AudioStreamContext::get_write_position() const {
+    return total_samples_written.load(std::memory_order_acquire);
 }
 
+bool AudioStreamContext::is_position_valid(uint64_t position) const {
+    uint64_t current_write_pos = total_samples_written.load(std::memory_order_acquire);
+    return position < current_write_pos &&  (current_write_pos - position) <= buffer_capacity;
+}
 
 /**
  * PortAudio callback function - runs on real-time audio thread.
+ *  This function must not:
+ * - Allocate memory (malloc/new)
+ * - Access the file system
+ * - Call any functions that may block
+ * - Take unpredictable amounts of time to complete
  *
- * for realtime applications, this function should avoid:
- * - Allocating memory (malloc/new)
- * - Accessing the file system
- * - Calling  any functions that may block
- * - Taking unpredictable amounts of time to complete
  */
 int AudioCallback(const void *inputBuffer, void *outputBuffer,
-                  unsigned long framesPerBuffer,
-                  const PaStreamCallbackTimeInfo* timeInfo,
-                  PaStreamCallbackFlags statusFlags,
-                  void *userData)
+                             unsigned long framesPerBuffer,
+                             const PaStreamCallbackTimeInfo* timeInfo,
+                             PaStreamCallbackFlags statusFlags,
+                             void *userData)
 {
     AudioStreamContext* ctx = static_cast<AudioStreamContext*>(userData);
-    // Handle null input or stopped recording
+
     if (inputBuffer == nullptr || !ctx->is_recording.load(std::memory_order_relaxed)) {
         return paContinue;
     }
 
-
-    // If multiple channels, portaudio input buffer is interleaved.
     const int16_t* input = static_cast<const int16_t*>(inputBuffer);
 
     // First callback: establish anchor between PortAudio time and wall-clock time
     if (!ctx->first_callback_captured.load(std::memory_order_relaxed)) {
-        // inputBufferAdcTime is the time when the first sample of the input buffer was captured,
-        // in seconds and relative to a stream-specific clock
-        ctx->first_callback_adc_time = timeInfo->inputBufferAdcTime;
+        // the inputBufferADCTime describes the time when the
+        // first sample of the input buffer was captured,
+        // synced with the clock of the device
+        ctx->first_sample_adc_time = timeInfo->inputBufferAdcTime;
         ctx->stream_start_time = std::chrono::system_clock::now();
         ctx->first_callback_captured.store(true, std::memory_order_relaxed);
     }
 
-    // Calculate how many seconds elapsed since the first sample of the stream was captured.
-    double seconds_since_stream_start = timeInfo->inputBufferAdcTime - ctx->first_callback_adc_time;
+    int total_samples = framesPerBuffer * ctx->info.num_channels;
 
-    // Process all frames from input buffer, creating and pushing chunks as they become full
-    unsigned long i = 0;
-    while (i < framesPerBuffer) {
-        size_t buffer_idx = ctx->current_sample_count;
-
-        // If starting a new chunk, capture its start timestamp
-        if (buffer_idx == 0) {
-            ctx->current_chunk_start_ns = calculate_sample_timestamp(ctx, seconds_since_stream_start, i);
-        }
-
-        // Get pointers to the beginning of the source frame and destination frame
-        const int16_t* src_frame = &input[i * ctx->info.num_channels];
-        int16_t* dst_frame = &ctx->working_buffer[buffer_idx * ctx->info.num_channels];
-
-        // Copy all channels of this frame
-        for (unsigned int ch = 0; ch < ctx->info.num_channels; ++ch) {
-            dst_frame[ch] = src_frame[ch];
-        }
-
-        ++ctx->current_sample_count;
-        ++i;
-
-        // When we have a full chunk, create and queue it
-        if (ctx->current_sample_count == ctx->samples_per_chunk) {
-            vsdk::AudioIn::audio_chunk chunk;
-
-            // Copy int16 PCM data directly from working buffer
-            // Total samples = frames * channels (e.g., 100 frames * 2 channels = 200 samples)
-            size_t total_samples = ctx->samples_per_chunk * ctx->info.num_channels;
-            // Note: resize can allocate memory
-            chunk.audio_data.resize(total_samples * sizeof(int16_t));
-            int16_t* audio_samples = reinterpret_cast<int16_t*>(chunk.audio_data.data());
-
-            for (size_t j = 0; j < total_samples; j++) {
-                audio_samples[j] = ctx->working_buffer[j];
-            }
-
-            chunk.info = ctx->info;
-            chunk.start_timestamp_ns = ctx->current_chunk_start_ns;
-            chunk.end_timestamp_ns = ctx->current_chunk_start_ns +
-                std::chrono::duration_cast<std::chrono::nanoseconds>(
-                    std::chrono::duration<double>(ctx->samples_per_chunk /
-                        static_cast<double>(ctx->info.sample_rate_hz))
-                );
-
-            ctx->push_chunk(std::move(chunk));
-
-            // Reset for next chunk
-            ctx->current_sample_count = 0;
-        }
+    for (int i = 0; i < total_samples; ++i) {
+        ctx->write_sample(input[i]);
     }
 
     return paContinue;
@@ -191,20 +119,21 @@ int AudioCallback(const void *inputBuffer, void *outputBuffer,
 
 std::chrono::nanoseconds calculate_sample_timestamp(
     const AudioStreamContext* ctx,
-    double seconds_since_stream_start,
-    unsigned long sample_index)
+    uint64_t sample_number)
 {
+    // Convert sample number to elapsed time
     double seconds_per_sample = 1.0 / static_cast<double>(ctx->info.sample_rate_hz);
-    double sample_elapsed_seconds = seconds_since_stream_start + (sample_index * seconds_per_sample);
+    // Divide by num_channels since sample_number counts interleaved samples
+    double elapsed_seconds = (sample_number / ctx->info.num_channels) * seconds_per_sample;
 
-    auto sample_elapsed_duration = std::chrono::duration_cast<std::chrono::nanoseconds>(
-        std::chrono::duration<double>(sample_elapsed_seconds)
+    auto elapsed_duration = std::chrono::duration_cast<std::chrono::nanoseconds>(
+        std::chrono::duration<double>(elapsed_seconds)
     );
 
-    auto sample_absolute_time = ctx->stream_start_time + sample_elapsed_duration;
+    auto absolute_time = ctx->stream_start_time + elapsed_duration;
 
     return std::chrono::duration_cast<std::chrono::nanoseconds>(
-        sample_absolute_time.time_since_epoch()
+        absolute_time.time_since_epoch()
     );
 }
 

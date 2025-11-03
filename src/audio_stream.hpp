@@ -2,7 +2,6 @@
 
 #include <viam/sdk/components/audio_in.hpp>
 #include <viam/sdk/common/audio.hpp>
-#include <boost/lockfree/spsc_queue.hpp>
 #include "portaudio.h"
 #include <chrono>
 #include <vector>
@@ -13,87 +12,47 @@ namespace microphone {
 
 namespace vsdk = ::viam::sdk;
 
-/**
- * Lock-free audio buffer for real-time audio streaming.
- *
- * Uses a single-producer, single-consumer lock-free queue to safely transfer
- * audio chunks from the real-time PortAudio callback thread to the consumer thread.
- *
- * Thread Safety:
- * - push_chunk(): Called from RT audio callback thread (lock-free, wait-free)
- * - get_new_chunks(): Called from consumer thread
- * - get_chunks_from_timestamp(): Called from consumer thread (uses mutex)
- */
+constexpr int BUFFER_DURATION_SECONDS = 10;  // How much audio history to keep
+constexpr double CHUNK_DURATION_SECONDS = 0.1;       // 100ms chunks (10 chunks per second)
+
+
+// AudioStreamContext managers a circular buffer of audio for a single
+// stream.
+// This struct is shared between the PortAudio callback (writer) and
+// the get_audio calls (readers)
 struct AudioStreamContext {
-    // Lock-free queue for real-time audio callback (single producer, single consumer)
-    // Capacity of 100 chunks (e.g., 10 seconds at 100ms chunks)
-    boost::lockfree::spsc_queue<vsdk::AudioIn::audio_chunk, boost::lockfree::capacity<100>> lockfree_queue;
+    std::unique_ptr<std::atomic<int16_t>[]> audio_buffer;
+    size_t buffer_capacity;
 
-    // Separate history buffer for timestamp-based queries (protected by mutex, only accessed from consumer thread)
-    std::vector<vsdk::AudioIn::audio_chunk> history_buffer;
-    size_t history_write_index;
-    size_t history_capacity;
-    std::mutex history_mutex;  // Only used in consumer thread, NOT in callback
-    vsdk::audio_info info; // avoid reconstruction for each audio chunk
+    vsdk::audio_info info;
+    int samples_per_chunk;
 
-    // Pre-allocated working buffer for the callback
-    // Temp storage for accumulating samples until we have a full chunk
-    std::vector<int16_t> working_buffer;
-    size_t samples_per_chunk;
-    size_t current_sample_count;
+    std::chrono::system_clock::time_point stream_start_time;
+    double first_sample_adc_time;
+    std::atomic<bool> first_callback_captured;
 
-    // Timing
-    std::chrono::system_clock::time_point stream_start_time;  // Start time of stream in Unix time
-    std::chrono::nanoseconds current_chunk_start_ns;  // Track start time of accumulating chunk
-    double first_callback_adc_time;  // Baseline PortAudio time from first callback
-    std::atomic<bool> first_callback_captured;  // Whether we've captured the baseline
-
+    std::atomic<uint64_t> total_samples_written;
     std::atomic<bool> is_recording;
 
     AudioStreamContext(const vsdk::audio_info& audio_info,
-                      size_t samples_per_chunk,
-                      size_t history_capacity = 100);
+                      int samples_per_chunk,
+                      int buffer_duration_seconds = BUFFER_DURATION_SECONDS);
 
-    /**
-     * Lock-free push - called from real-time audio callback.
-     * This is wait-free and safe for audiocallback - no blocking, no allocation.
-     */
-    inline void push_chunk(vsdk::AudioIn::audio_chunk&& chunk) {
-        lockfree_queue.push(std::move(chunk));
-    }
+    // Writes an audio sample to the audio buffer
+    void write_sample(int16_t sample);
 
-    /**
-     * Consumer-side method: pop chunks from lock-free queue.
-     * This should be called from get_audio() (non RT thread)
-     */
-    std::vector<vsdk::AudioIn::audio_chunk> get_new_chunks();
 
-    /**
-     * Query chunks by timestamp range from history buffer.
-     * Safe to call from any non-RT thread.
-     */
-    std::vector<vsdk::AudioIn::audio_chunk> get_chunks_from_timestamp(
-        int64_t start_timestamp_ns,
-        int64_t end_timestamp_ns = INT64_MAX);
+    // Read sample_count samples from the circular buffer starting at the inputted postion
+    int read_samples(int16_t* buffer, int sample_count, uint64_t& position);
 
-    /**
-     * Get the time range of available audio data in the history buffer.
-     */
-    std::pair<int64_t, int64_t> get_available_time_range() const;
+    uint64_t get_write_position() const;
+
+    bool is_position_valid(uint64_t position) const;
 };
 
-/**
- * Calculate absolute wall-clock timestamp for a specific sample.
- *
- * @param ctx Audio stream context
- * @param seconds_since_stream_start Elapsed PA time since first callback (seconds)
- * @param sample_index Index of the sample within current callback buffer
- * @return Absolute timestamp in nanoseconds since Unix epoch
- */
 std::chrono::nanoseconds calculate_sample_timestamp(
     const AudioStreamContext* ctx,
-    double seconds_since_stream_start,
-    unsigned long sample_index);
+    uint64_t sample_number);
 
 /**
  * PortAudio callback function - runs on real-time audio thread.

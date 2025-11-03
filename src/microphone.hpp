@@ -17,18 +17,26 @@ namespace microphone {
 namespace vsdk = ::viam::sdk;
 
 /**
+ * Configuration for opening a PortAudio input stream.
+ */
+struct StreamConfig {
+    PaDeviceIndex device_index;
+    int channels;
+    int sample_rate;
+    double latency = 0.0;  // Suggested latency in seconds (0.0 = use device default)
+    PaStreamCallback* callback = nullptr;
+    void* user_data = nullptr;
+};
+
+/**
  * Opens a PortAudio input stream for audio recording.
  *
  * @param stream Pointer to receive the opened stream
- * @param deviceIndex PortAudio device index to use
- * @param channels Number of audio channels (1=mono, 2=stereo)
- * @param sampleRate Sample rate in Hz (e.g., 44100)
- * @param callback Callback function to process audio data
- * @param userData User data passed to callback
+ * @param config Stream configuration parameters
  * @param pa Optional PortAudio interface (for testing)
  */
-void openStream(PaStream** stream, PaDeviceIndex deviceIndex, int channels, int sampleRate,
-                PaStreamCallback* callback, void* userData = nullptr,
+void openStream(PaStream** stream,
+                const StreamConfig& config,
                 audio::portaudio::PortAudioInterface* pa = nullptr);
 
 void startStream(PaStream* stream, audio::portaudio::PortAudioInterface* pa= nullptr);
@@ -57,18 +65,21 @@ public:
     viam::sdk::audio_properties get_properties(const viam::sdk::ProtoStruct& extra);
     std::vector<viam::sdk::GeometryConfig> get_geometries(const viam::sdk::ProtoStruct& extra);
     void reconfigure(const viam::sdk::Dependencies& deps, const viam::sdk::ResourceConfig& cfg);
+    void setupStreamFromConfig(const viam::sdk::ResourceConfig& cfg);
 
     // Member variables
     std::string device_name_;
     int sample_rate_;
     int num_channels_;
+    double latency_;  // Suggested latency in seconds (0.0 = use device default)
     static vsdk::Model model;
 
-    // The mutex protects the stream and context
+    // The mutex protects the stream and context pointer
     std::mutex stream_ctx_mu_;
     PaStream* stream_;
-    std::unique_ptr<AudioStreamContext> audio_context_;
+    std::shared_ptr<AudioStreamContext> audio_context_;  // shared_ptr allows safe reconfiguration
     audio::portaudio::PortAudioInterface* pa_;
+    int active_streams_;  // Count of active get_audio calls
 };
 
 /**

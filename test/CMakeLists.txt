@@ -13,7 +13,7 @@ function(audio_add_gtest SOURCE_FILE_NAME)
 
     add_executable(${TEST_EXECUTABLE_NAME}
         ${SOURCE_FILE_NAME}
-        ${CMAKE_SOURCE_DIR}/src/module.cpp
+        ${CMAKE_SOURCE_DIR}/src/microphone.cpp
         ${CMAKE_SOURCE_DIR}/src/audio_stream.cpp
     )
     target_link_libraries(${TEST_EXECUTABLE_NAME}
@@ -32,7 +32,7 @@ function(audio_add_gtest SOURCE_FILE_NAME)
     gtest_discover_tests(${TEST_EXECUTABLE_NAME})
 endfunction()
 
-audio_add_gtest(audio_test.cpp)
+audio_add_gtest(microphone_test.cpp)
 audio_add_gtest(audio_stream_test.cpp)
 
 

@@ -1,4 +1,4 @@
-#include "module.hpp"
+#include "microphone.hpp"
 #include <viam/sdk/common/instance.hpp>
 #include <viam/sdk/module/service.hpp>
 
