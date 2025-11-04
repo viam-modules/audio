@@ -84,25 +84,29 @@ std::vector<std::string> Microphone::validate(viam::sdk::ResourceConfig cfg) {
 void Microphone::reconfigure(const viam::sdk::Dependencies& deps, const viam::sdk::ResourceConfig& cfg) {
     VIAM_SDK_LOG(info) << "[reconfigure] Microphone reconfigure start";
 
-
-    //
-    // Warn if reconfiguring with active streams
-    // Changing the sample rate or number of channels mid stream
-    // might cause issues client side, clients need to be actively
-    // checking the audioinfo for changes. Changing these parameters
-    // may also cause a small gap in audio.
-    {
-        std::lock_guard<std::mutex> lock(stream_ctx_mu_);
-        if (active_streams_ > 0) {
-            VIAM_SDK_LOG(warn) << "[reconfigure] Reconfiguring with " << active_streams_
-                               << " active stream(s). This may cause audio gaps or break "
-                               << "encoded audio. Clients should monitor audio_info in chunks.";
+    try {
+        //
+        // Warn if reconfiguring with active streams
+        // Changing the sample rate or number of channels mid stream
+        // might cause issues client side, clients need to be actively
+        // checking the audioinfo for changes. Changing these parameters
+        // may also cause a small gap in audio.
+        {
+            std::lock_guard<std::mutex> lock(stream_ctx_mu_);
+            if (active_streams_ > 0) {
+                VIAM_SDK_LOG(warn) << "[reconfigure] Reconfiguring with " << active_streams_
+                                   << " active stream(s). This may cause audio gaps or break "
+                                   << "encoded audio. Clients should monitor audio_info in chunks.";
+            }
         }
+
+        auto params = parseConfigAttributes(cfg);
+        setupStreamFromConfig(params);
+        VIAM_SDK_LOG(info) << "[reconfigure] Reconfigure completed successfully";
+    } catch (const std::exception& e) {
+        VIAM_SDK_LOG(error) << "[reconfigure] Reconfigure failed: " << e.what();
+        throw;
     }
-
-    auto params = parseConfigAttributes(cfg);
-    setupStreamFromConfig(params);
-
 }
 
 viam::sdk::ProtoStruct Microphone::do_command(const viam::sdk::ProtoStruct& command) {
@@ -463,9 +467,13 @@ void openStream(PaStream** stream,
     );
 
     if (err != paNoError) {
-        VIAM_SDK_LOG(error) << "failed to open audio stream: " << Pa_GetErrorText(err);
         std::ostringstream buffer;
-        buffer << "failed to open audio stream: " << Pa_GetErrorText(err);
+        buffer << "Failed to open audio stream for device '" << deviceInfo->name << "': "
+               << Pa_GetErrorText(err)
+               << " (sample_rate=" << config.sample_rate
+               << ", channels=" << config.channels
+               << ", latency=" << params.suggestedLatency << "s)";
+        VIAM_SDK_LOG(error) << buffer.str();
         throw std::runtime_error(buffer.str());
     }
 }
