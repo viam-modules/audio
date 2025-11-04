@@ -74,11 +74,6 @@ uint64_t AudioStreamContext::get_write_position() const {
     return total_samples_written.load(std::memory_order_acquire);
 }
 
-// bool AudioStreamContext::is_position_valid(uint64_t position) const {
-//     uint64_t current_write_pos = total_samples_written.load(std::memory_order_acquire);
-//     return position < current_write_pos &&  (current_write_pos - position) <= buffer_capacity;
-// }
-
 /**
  * PortAudio callback function - runs on real-time audio thread.
  *  This function must not:

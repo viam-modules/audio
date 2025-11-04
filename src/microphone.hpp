@@ -11,9 +11,9 @@
 #include <string>
 #include <vector>
 #include <functional>
+#include <optional>
 
 namespace microphone {
-
 namespace vsdk = ::viam::sdk;
 
 struct StreamConfig {

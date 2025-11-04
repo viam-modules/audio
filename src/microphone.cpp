@@ -24,22 +24,18 @@ ConfigParams parseConfigAttributes(const viam::sdk::ResourceConfig& cfg) {
     auto attrs = cfg.attributes();
     ConfigParams params;
 
-    // Parse device name
     if (attrs.count("device_name")) {
         params.device_name = *attrs.at("device_name").get<std::string>();
     }
 
-    // Parse sample rate (optional)
     if (attrs.count("sample_rate")) {
         params.sample_rate = static_cast<int>(*attrs.at("sample_rate").get<double>());
     }
 
-    // Parse num_channels (optional)
     if (attrs.count("num_channels")) {
         params.num_channels = static_cast<int>(*attrs.at("num_channels").get<double>());
     }
 
-    // Parse latency in milliseconds (optional)
     if (attrs.count("latency")) {
         params.latency_ms = *attrs.at("latency").get<double>();
     }
@@ -195,16 +191,12 @@ void Microphone::get_audio(std::string const& codec,
         uint64_t write_pos = current_context->get_write_position();
         uint64_t available_samples = write_pos - read_position;
 
-
-        VIAM_SDK_LOG(info) << "avaliable samples: " << available_samples;
-
         // Wait until we have a full chunk worth of samples
         if (available_samples < samples_per_chunk) {
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
             continue;
         }
 
-        // Allocate buffer for this chunk size
         std::vector<int16_t> temp_buffer(samples_per_chunk);
         uint64_t chunk_start_position = read_position;
         // Read exactly one chunk worth of samples
@@ -216,7 +208,6 @@ void Microphone::get_audio(std::string const& codec,
             continue;
         }
 
-        // Create chunk
         vsdk::AudioIn::audio_chunk chunk;
         chunk.audio_data.resize(samples_read * sizeof(int16_t));
         std::memcpy(chunk.audio_data.data(), temp_buffer.data(), samples_read * sizeof(int16_t));
@@ -245,7 +236,6 @@ void Microphone::get_audio(std::string const& codec,
 
         if (!chunk_handler(std::move(chunk))) {
             VIAM_RESOURCE_LOG(info) << "Chunk handler returned false, stopping";
-            // Decrement active stream count before returning
             {
                 std::lock_guard<std::mutex> lock(stream_ctx_mu_);
                 active_streams_--;
@@ -288,8 +278,6 @@ void Microphone::setupStreamFromConfig(const ConfigParams& params) {
     std::string new_device_name = params.device_name.empty() ? device_name_ : params.device_name;
     PaDeviceIndex device_index;
     const PaDeviceInfo* deviceInfo;
-
-    VIAM_SDK_LOG(info) << "new device " << new_device_name;
 
     if (new_device_name.empty()) {
         device_index = audio_interface.getDefaultInputDevice();
@@ -429,7 +417,8 @@ void startPortAudio(audio::portaudio::PortAudioInterface* pa) {
       for (int i = 0; i < numDevices; i++) {
           const PaDeviceInfo* info = Pa_GetDeviceInfo(i);
           if (info->maxInputChannels > 0) {
-              VIAM_SDK_LOG(info) << i << ": \"" << info->name << "\" ";
+              VIAM_SDK_LOG(info) << info->name << " default sample rate: " << info->defaultSampleRate
+              << "max input channels: " << info->maxInputChannels;
           }
       }
 }
@@ -447,7 +436,7 @@ void openStream(PaStream** stream,
         throw std::runtime_error("failed to get device info for device index " + std::to_string(config.device_index));
     }
 
-    VIAM_SDK_LOG(info) << "Device: " << deviceInfo->name
+    VIAM_SDK_LOG(debug) << "Device: " << deviceInfo->name
                          << ", Default sample rate: " << deviceInfo->defaultSampleRate
                          << ", Max input channels: " << deviceInfo->maxInputChannels;
 
@@ -456,8 +445,7 @@ void openStream(PaStream** stream,
     params.device = config.device_index;
     params.channelCount = config.channels;
     params.sampleFormat = paInt16;
-    // Use provided latency, or device default if latency is 0.0
-    params.suggestedLatency = (config.latency > 0.0) ? config.latency : deviceInfo->defaultLowInputLatency;
+    params.suggestedLatency = config.latency;
     params.hostApiSpecificStreamInfo = nullptr;  // Must be NULL if not used
 
     VIAM_SDK_LOG(info) << "opening stream for device " << deviceInfo->name << " with sample rate " <<
@@ -469,7 +457,7 @@ void openStream(PaStream** stream,
         NULL,                 // output params
         config.sample_rate,
         paFramesPerBufferUnspecified, // let portaudio pick the frames per buffer
-        paClipOff,           // stream flags - disable clipping
+        paNoFlag,            // stream flags - enable default clipping behavior
         config.callback,
         config.user_data     // user data to pass through to callback
     );
