@@ -40,7 +40,6 @@ void openStream(PaStream** stream,
 void startStream(PaStream* stream, audio::portaudio::PortAudioInterface* pa= nullptr);
 PaDeviceIndex findDeviceByName(const std::string& name, audio::portaudio::PortAudioInterface* pa= nullptr);
 void shutdownStream(PaStream* stream, audio::portaudio::PortAudioInterface* pa= nullptr);
-void startPortAudio(audio::portaudio::PortAudioInterface* pa = nullptr);
 
 
 class Microphone final : public viam::sdk::AudioIn, public viam::sdk::Reconfigurable {

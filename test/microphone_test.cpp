@@ -738,17 +738,6 @@ class PortAudioTest : public AudioTestBase {
 };
 
 
-TEST_F(PortAudioTest, TestStartPortAudioSuccess) {
-    EXPECT_CALL(*mock_pa_, initialize())
-        .Times(1)
-        .WillOnce(::testing::Return(paNoError));
-
-    // Test that startPortAudio doesn't throw when mock returns success
-    EXPECT_NO_THROW({
-        microphone::startPortAudio(mock_pa_.get());
-    });
-}
-
 TEST_F(PortAudioTest, TestOpenStreamSuccessDefaultDevice) {
     PaStream* stream = nullptr;
     int channels = 2;

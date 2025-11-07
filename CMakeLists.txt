@@ -12,6 +12,7 @@ add_executable(audio-module
     src/main.cpp
     src/microphone.cpp
     src/audio_stream.cpp
+    src/discovery.cpp
 )
 
 find_package(viam-cpp-sdk REQUIRED)

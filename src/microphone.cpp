@@ -404,29 +404,6 @@ void Microphone::setupStreamFromConfig(const ConfigParams& params) {
 }
 
 
-void startPortAudio(audio::portaudio::PortAudioInterface* pa) {
-    audio::portaudio::RealPortAudio real_pa;
-    audio::portaudio::PortAudioInterface& audio_interface = pa ? *pa : real_pa;
-
-    PaError err = audio_interface.initialize();
-    if (err != 0) {
-        std::ostringstream buffer;
-        buffer << "failed to initialize PortAudio library: " << Pa_GetErrorText(err);
-        throw std::runtime_error(buffer.str());
-    }
-
-    int numDevices = Pa_GetDeviceCount();
-    VIAM_SDK_LOG(info) << "Available input devices:\n";
-
-      for (int i = 0; i < numDevices; i++) {
-          const PaDeviceInfo* info = Pa_GetDeviceInfo(i);
-          if (info->maxInputChannels > 0) {
-              VIAM_SDK_LOG(info) << info->name << " default sample rate: " << info->defaultSampleRate
-              << "max input channels: " << info->maxInputChannels;
-          }
-      }
-}
-
 void openStream(PaStream** stream,
                 const StreamConfig& config,
                 audio::portaudio::PortAudioInterface* pa) {
