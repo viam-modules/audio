@@ -44,6 +44,12 @@ ConfigParams parseConfigAttributes(const viam::sdk::ResourceConfig& cfg);
 PaDeviceIndex findDeviceByName(const std::string& name, const audio::portaudio::PortAudioInterface& pa);
 void startPortAudio(const audio::portaudio::PortAudioInterface* pa = nullptr);
 
+// Helper function to calculate initial read position from a timestamp
+// Returns the sample position to start reading from
+// Throws std::invalid_argument if timestamp is invalid (too old, in future, etc.)
+uint64_t get_initial_read_position(const std::shared_ptr<AudioStreamContext>& stream_context,
+                                    int64_t previous_timestamp);
+
 
 class Microphone final : public viam::sdk::AudioIn, public viam::sdk::Reconfigurable {
 public:

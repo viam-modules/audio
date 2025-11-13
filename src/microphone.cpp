@@ -145,11 +145,6 @@ void Microphone::get_audio(std::string const& codec,
         throw std::invalid_argument("previous_timestamp must be non-negative");
     }
 
-    {
-        std::lock_guard<std::mutex> lock(stream_ctx_mu_);
-        active_streams_++;
-    }
-
     // Set duration timer
     auto start_time = std::chrono::steady_clock::time_point();
     auto end_time = std::chrono::steady_clock::time_point::max();
@@ -166,39 +161,17 @@ void Microphone::get_audio(std::string const& codec,
         stream_context = audio_context_;
     }
 
-     // Initialize read position
-    if (stream_context) {
-        if (previous_timestamp == 0) {
-            // Default: start from current write position (most recent audio)
-            read_position = stream_context->get_write_position();
-        } else {
-            // Check if timestamp is before stream started
-            auto stream_start_ns = std::chrono::time_point_cast<std::chrono::nanoseconds>(stream_context->stream_start_time);
-            int64_t stream_start_timestamp_ns = stream_start_ns.time_since_epoch().count();
+    try {
+    // Initialize read position from timestamp
+    read_position = get_initial_read_position(stream_context, previous_timestamp);
+    } catch (const std::exception& e) {
+        VIAM_SDK_LOG(error) << "failed to get audio: " << e.what();
+        throw;
+    }
 
-            if (previous_timestamp < stream_start_timestamp_ns) {
-                throw std::invalid_argument("Requested timestamp is before stream started");
-            }
-
-            // Start reading from the next sample after the previous timestamp
-            // Note: If timestamp falls between samples, rounds down then advances
-            uint64_t sample_number = stream_context->get_sample_number_from_timestamp(previous_timestamp);
-            read_position = sample_number + 1;
-
-            // Check if requested position is still available in buffer
-            uint64_t current_write_pos = stream_context->get_write_position();
-
-            if (read_position > current_write_pos) {
-                throw std::invalid_argument("Requested timestamp is in the future - audio not yet captured");
-            }
-
-            if (current_write_pos > read_position + stream_context->buffer_capacity) {
-                std::ostringstream stream;
-                stream << "Requested timestamp is too old - audio has been overwritten. "
-                          << "Buffer only holds " << BUFFER_DURATION_SECONDS << " seconds of audio history.";
-                throw std::invalid_argument(stream.str());
-            }
-        }
+    {
+        std::lock_guard<std::mutex> lock(stream_ctx_mu_);
+        active_streams_++;
     }
 
     // Get sample rate and channels - will be updated if context changes
@@ -209,6 +182,7 @@ void Microphone::get_audio(std::string const& codec,
         stream_sample_rate = sample_rate_;
         stream_num_channels = num_channels_;
     }
+
     int samples_per_chunk = (stream_sample_rate * CHUNK_DURATION_SECONDS) * stream_num_channels;
     if (samples_per_chunk <= 0){
         std::ostringstream buffer;
@@ -556,6 +530,49 @@ void Microphone::startStream(PaStream* stream) {
         VIAM_SDK_LOG(error) << "Failed to start audio stream: " << Pa_GetErrorText(err);
         throw std::runtime_error(std::string("Failed to start audio stream: ") + Pa_GetErrorText(err));
     }
+}
+
+uint64_t get_initial_read_position(const std::shared_ptr<AudioStreamContext>& stream_context,
+                                    int64_t previous_timestamp) {
+    if (!stream_context) {
+        throw std::invalid_argument("stream_context is null");
+    }
+
+    // default: start from current write position (most recent audio)
+    if (previous_timestamp == 0) {
+        return stream_context->get_write_position();
+    }
+
+    // Validate timestamp is not before stream started
+    auto stream_start_ns = std::chrono::time_point_cast<std::chrono::nanoseconds>(stream_context->stream_start_time);
+    int64_t stream_start_timestamp_ns = stream_start_ns.time_since_epoch().count();
+
+
+    if (previous_timestamp < stream_start_timestamp_ns) {
+        throw std::invalid_argument("Requested timestamp is before stream started");
+    }
+
+    // Convert timestamp to sample position
+    // Note: If timestamp falls between samples, rounds down then advances
+    uint64_t sample_number = stream_context->get_sample_number_from_timestamp(previous_timestamp);
+    uint64_t read_position = sample_number + 1;
+
+
+    // Validate timestamp is not in the future
+    uint64_t current_write_pos = stream_context->get_write_position();
+    if (read_position > current_write_pos) {
+        throw std::invalid_argument("Requested timestamp is in the future - audio not yet captured");
+    }
+
+    // Validate timestamp is not too old (audio has been overwritten in circular buffer
+    if (current_write_pos > read_position + stream_context->buffer_capacity) {
+        std::ostringstream stream;
+        stream << "Requested timestamp is too old - audio has been overwritten. "
+               << "Buffer only holds " << BUFFER_DURATION_SECONDS << " seconds of audio history.";
+        throw std::invalid_argument(stream.str());
+    }
+
+    return read_position;
 }
 
 PaDeviceIndex findDeviceByName(const std::string& name, const audio::portaudio::PortAudioInterface& pa) {

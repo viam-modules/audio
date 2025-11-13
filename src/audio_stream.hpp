@@ -12,7 +12,7 @@ namespace microphone {
 
 namespace vsdk = ::viam::sdk;
 
-constexpr int BUFFER_DURATION_SECONDS = 10;  // How much audio history to keep in buffer
+constexpr int BUFFER_DURATION_SECONDS = 30;  // How much audio history to keep in buffer
 constexpr double CHUNK_DURATION_SECONDS = 0.1;   // 100ms chunks (10 chunks per second)
 constexpr uint64_t NANOSECONDS_PER_SECOND = 1000000000ULL;
 
