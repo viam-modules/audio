@@ -119,10 +119,10 @@ uint64_t AudioStreamContext::get_sample_number_from_timestamp(int64_t timestamp)
     int64_t stream_start_timestamp_ns = stream_start_ns.time_since_epoch().count();
 
     int64_t elapsed_time_ns = timestamp - stream_start_timestamp_ns;
-
-    uint64_t sample_number = (static_cast<uint64_t>(elapsed_time_ns) *
-                              static_cast<uint64_t>(info.sample_rate_hz) *
-                              static_cast<uint64_t>(info.num_channels)) / NANOSECONDS_PER_SECOND;
+    double elapsed_seconds = static_cast<double>(elapsed_time_ns) / NANOSECONDS_PER_SECOND;
+    uint64_t sample_number = static_cast<uint64_t>(
+        elapsed_seconds * info.sample_rate_hz * info.num_channels
+    );
     return sample_number;
 }
 
