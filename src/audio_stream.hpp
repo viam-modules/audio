@@ -45,7 +45,7 @@ struct AudioStreamContext {
 
     uint64_t get_write_position() const noexcept;
     std::chrono::nanoseconds calculate_sample_timestamp(uint64_t sample_number) noexcept;
-    uint64_t get_sample_number_from_timestamp(int64_t timestamp);
+    uint64_t get_sample_number_from_timestamp(int64_t timestamp) noexcept;
 };
 
 

@@ -114,24 +114,15 @@ uint64_t AudioStreamContext::get_write_position() const noexcept {
     return total_samples_written.load(std::memory_order_acquire);
 }
 
-uint64_t AudioStreamContext::get_sample_number_from_timestamp(int64_t timestamp) {
-    if (timestamp < 0) {
-        throw std::invalid_argument("timestamp must be postive");
-    }
-
+uint64_t AudioStreamContext::get_sample_number_from_timestamp(int64_t timestamp) noexcept{
     auto stream_start_ns = std::chrono::time_point_cast<std::chrono::nanoseconds>(stream_start_time);
     int64_t stream_start_timestamp_ns = stream_start_ns.time_since_epoch().count();
 
-    // Check if timestamp is before stream started
-    if (timestamp < stream_start_timestamp_ns) {
-        throw std::invalid_argument("requested timestamp is before stream started");
-    }
-
     int64_t elapsed_time_ns = timestamp - stream_start_timestamp_ns;
-    double elapsed_time_seconds = static_cast<double>(elapsed_time_ns) / 1e9;
-    uint64_t sample_number = static_cast<uint64_t>(
-        elapsed_time_seconds * static_cast<double>(info.sample_rate_hz) * info.num_channels
-    );
+
+    uint64_t sample_number = (static_cast<uint64_t>(elapsed_time_ns) *
+                              static_cast<uint64_t>(info.sample_rate_hz) *
+                              static_cast<uint64_t>(info.num_channels)) / NANOSECONDS_PER_SECOND;
     return sample_number;
 }
 

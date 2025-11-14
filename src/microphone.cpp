@@ -132,17 +132,20 @@ void Microphone::get_audio(std::string const& codec,
 
     // Validate codec is supported
     if (codec != vsdk::audio_codecs::PCM_16) {
-        VIAM_SDK_LOG(error) << "Unsupported codec: " + codec +
+        std::ostringstream buffer;
+        buffer "Unsupported codec: " + codec +
             ". Supported codecs: pcm16";
-        throw std::invalid_argument("Unsupported codec: " + codec +
-            ". Supported codecs: pcm16");
+        VIAM_SDK_LOG(error) << buffer.str();
+        throw std::runtime_error(buffer.str());
     }
 
     // Validate timestamp
     if (previous_timestamp < 0) {
-        VIAM_SDK_LOG(error) << "Invalid previous_timestamp: " << previous_timestamp
+        std::ostringstream buffer;
+        buffer << "Invalid previous_timestamp: " << previous_timestamp
                            << " (must be non-negative)";
-        throw std::invalid_argument("previous_timestamp must be non-negative");
+        VIAM_SDK_LOG(error) << buffer.str();
+        throw std::runtime_error(buffer.str());
     }
 
     // Set duration timer
@@ -161,13 +164,8 @@ void Microphone::get_audio(std::string const& codec,
         stream_context = audio_context_;
     }
 
-    try {
     // Initialize read position based on timestamp param
     read_position = get_initial_read_position(stream_context, previous_timestamp);
-    } catch (const std::exception& e) {
-        VIAM_SDK_LOG(error) << "failed to get audio: " << e.what();
-        throw;
-    }
 
     {
         std::lock_guard<std::mutex> lock(stream_ctx_mu_);
@@ -543,28 +541,50 @@ uint64_t get_initial_read_position(const std::shared_ptr<AudioStreamContext>& st
         return stream_context->get_write_position();
     }
 
+    // Validate timestamp is non-negative
+    if (previous_timestamp < 0) {
+        std::ostringstream buffer;
+        buffer << "Invalid previous_timestamp: " << previous_timestamp
+                           << " (must be non-negative)";
+        VIAM_SDK_LOG(error) << buffer.str();
+        throw std::invalid_argument(buffer.str());;
+    }
+
     // Validate timestamp is not before stream started
     auto stream_start_ns = std::chrono::time_point_cast<std::chrono::nanoseconds>(stream_context->stream_start_time);
     int64_t stream_start_timestamp_ns = stream_start_ns.time_since_epoch().count();
+    if (previous_timestamp < stream_start_timestamp_ns) {
+        std::ostringstream buffer;
+        buffer << "Requested timestamp is before stream started:
+        stream started at " << stream_start_timestamp_ns <<
+        " requested: " << previous_timestamp;
+        VIAM_SDK_LOG(error) << buffer.str();
+        throw std::invalid_argument(buffer.str());;
+    }
 
     // Convert timestamp to sample position, then advance by 1
     // We read from the NEXT sample after the requested timestamp
     uint64_t sample_number = stream_context->get_sample_number_from_timestamp(previous_timestamp);
     uint64_t read_position = sample_number + 1;
 
-
     // Validate timestamp is not in the future
     uint64_t current_write_pos = stream_context->get_write_position();
     if (read_position > current_write_pos) {
-        throw std::invalid_argument("Requested timestamp is in the future - audio not yet captured");
+        std::ostringstream buffer;
+        buffer << "requested timestamp " <<
+        previous_timestamp <<
+        " is in the future  audio not yet captured"
+        VIAM_SDK_LOG(error) << buffer.str();
+        throw std::invalid_argument(buffer.str());
     }
 
     // Validate timestamp is not too old (audio has been overwritten)
     if (current_write_pos > read_position + stream_context->buffer_capacity) {
-        std::ostringstream stream;
-        stream << "Requested timestamp is too old - audio has been overwritten. "
+        std::ostringstream buffer;
+        stream << "requested timestamp is too old - audio has been overwritten. "
                << "Buffer only holds " << BUFFER_DURATION_SECONDS << " seconds of audio history.";
-        throw std::invalid_argument(stream.str());
+        VIAM_SDK_LOG(buffer.str())
+        throw std::invalid_argument(buffer.str());
     }
 
     return read_position;
