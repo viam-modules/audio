@@ -74,9 +74,15 @@ void initialize_mp3_encoder(MP3EncoderContext& ctx, int sample_rate, int num_cha
 void encode_mp3_samples(MP3EncoderContext& ctx,
                         const int16_t* samples,
                         int sample_count,
+                        uint64_t chunk_start_position,
                         std::vector<uint8_t>& output_data) {
     if (!ctx.ffmpeg_ctx || !ctx.frame) {
         throw std::runtime_error("MP3 encoder not initialized");
+    }
+
+    // Track position of first sample if buffer is empty
+    if (ctx.buffer.empty()) {
+        ctx.buffer_start_position = chunk_start_position;
     }
 
     ctx.buffer.insert(ctx.buffer.end(), samples, samples + sample_count);
@@ -95,8 +101,10 @@ void encode_mp3_samples(MP3EncoderContext& ctx,
             throw std::runtime_error("Error sending frame to MP3 encoder");
         }
 
-        // Remove encoded samples from buffer
+        // Remove encoded samples from buffer and update position tracking
         ctx.buffer.erase(ctx.buffer.begin(), ctx.buffer.begin() + samples_per_frame);
+        ctx.buffer_start_position += samples_per_frame;
+        ctx.total_samples_encoded += samples_per_frame;
 
         // Receive encoded packets (may get multiple or none due to encoder buffering)
         CleanupPtr<avpacket_cleanup> pkt(av_packet_alloc());
@@ -116,22 +124,23 @@ void encode_mp3_samples(MP3EncoderContext& ctx,
     }
 }
 
-int flush_mp3_encoder(MP3EncoderContext& ctx) {
+void flush_mp3_encoder(MP3EncoderContext& ctx, std::vector<uint8_t>& output_data) {
     if (!ctx.ffmpeg_ctx) {
-        return 0;
+        return;
     }
 
     // Flush encoder by sending NULL frame
     avcodec_send_frame(ctx.ffmpeg_ctx.get(), nullptr);
 
-    // Drain and count remaining packets
+    // Drain remaining packets and append to output
     CleanupPtr<avpacket_cleanup> pkt(av_packet_alloc());
     if (!pkt) {
-        return 0;
+        return;
     }
 
     int flushed_packets = 0;
     while (avcodec_receive_packet(ctx.ffmpeg_ctx.get(), pkt.get()) == 0) {
+        output_data.insert(output_data.end(), pkt->data, pkt->data + pkt->size);
         flushed_packets++;
         av_packet_unref(pkt.get());
     }
@@ -144,8 +153,6 @@ int flush_mp3_encoder(MP3EncoderContext& ctx) {
         VIAM_SDK_LOG(info) << "Discarded " << ctx.buffer.size() / ctx.num_channels
                            << " unbuffered samples at end of stream";
     }
-
-    return flushed_packets;
 }
 
 void cleanup_mp3_encoder(MP3EncoderContext& ctx) {
