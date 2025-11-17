@@ -55,9 +55,6 @@ public:
     std::atomic<bool> first_callback_captured;
 };
 
-// Alias for backwards compatibility during refactoring
-using AudioStreamContext = InputStreamContext;
-
 // OutputStreamContext manages a circular buffer of audio for speaker output
 // Extends AudioBuffer with playback position tracking
 class OutputStreamContext : public AudioBuffer {
@@ -67,10 +64,5 @@ public:
 
     std::atomic<uint64_t> playback_position;
 };
-
-std::chrono::nanoseconds calculate_sample_timestamp(
-    const AudioStreamContext& ctx,
-    uint64_t sample_number);
-
 
 } // namespace audio

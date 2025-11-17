@@ -21,7 +21,7 @@ Speaker::Speaker(viam::sdk::Dependencies deps, viam::sdk::ResourceConfig cfg,
 
     // Create audio context with actual sample rate/channels from params
     vsdk::audio_info info{vsdk::audio_codecs::PCM_16, stream_params.sample_rate, stream_params.num_channels};
-    auto new_audio_context = std::make_shared<audio::OutputStreamContext>(info, audio::BUFFER_DURATION_SECONDS);
+    auto new_audio_context = std::make_shared<audio::OutputStreamContext>(info, 30);  // 30 second buffer for speaker
 
     // Set user_data to point to the audio context
     stream_params.user_data = new_audio_context.get();
@@ -78,7 +78,7 @@ int speakerCallback(const void* inputBuffer,
     }
 
     // userData points to OutputStreamContext
-    microphone::OutputStreamContext* ctx = static_cast<microphone::OutputStreamContext*>(userData);
+    audio::OutputStreamContext* ctx = static_cast<audio::OutputStreamContext*>(userData);
 
     // Cast outputBuffer to writable int16_t pointer (NOT const!)
     int16_t* output = static_cast<int16_t*>(outputBuffer);
@@ -133,9 +133,23 @@ viam::sdk::ProtoStruct Speaker::do_command(const viam::sdk::ProtoStruct& command
 }
 
 
+/**
+ * Play audio data through the speaker.
+ *
+ * This method blocks until the audio has been completely played back.
+ * Audio is written to an internal circular buffer and played asynchronously
+ * by the PortAudio callback. The method waits until playback is complete
+ * before returning.
+ *
+ * @throws std::invalid_argument if codec is not PCM_16 or data size is invalid
+ */
 void Speaker::play(std::vector<uint8_t> const& audio_data,
                       boost::optional<viam::sdk::audio_info> info,
                       const viam::sdk::ProtoStruct& extra) {
+
+    std::lock_guard<std::mutex> playback_lock(playback_mu_);
+
+    VIAM_SDK_LOG(info) << "Play called, adding samples to playback buffer";
 
     // Validate codec if provided
     if (info && info->codec != vsdk::audio_codecs::PCM_16) {
@@ -159,12 +173,26 @@ void Speaker::play(std::vector<uint8_t> const& audio_data,
                        << audio_data.size() << " bytes)";
 
     // Write samples to the audio buffer
-    // The callback will read from this buffer to play the audio
-    std::lock_guard<std::mutex> lock(stream_mu_);
-    for (size_t i = 0; i < num_samples; i++) {
-        audio_context_->write_sample(samples[i]);
-    }
+      uint64_t start_position;
+      {
+          std::lock_guard<std::mutex> lock(stream_mu_);
+          start_position = audio_context_->get_write_position();
 
+          for (size_t i = 0; i < num_samples; i++) {
+              audio_context_->write_sample(samples[i]);
+          }
+      }
+
+      uint64_t end_position = start_position + num_samples;
+
+      // Block until playback position catches up
+      VIAM_SDK_LOG(debug) << "Waiting for playback to complete...";
+      while (audio_context_->playback_position.load() - start_position < num_samples) {
+          std::this_thread::sleep_for(std::chrono::milliseconds(10));
+      }
+
+      VIAM_SDK_LOG(info) << "Audio playback complete";
+  }
 }
 
 viam::sdk::audio_properties Speaker::get_properties(const vsdk::ProtoStruct& extra) {

@@ -54,6 +54,7 @@ public:
 
     viam::sdk::ProtoStruct do_command(const viam::sdk::ProtoStruct& command);
 
+    
     void play(std::vector<uint8_t> const& audio_data,
                       boost::optional<viam::sdk::audio_info> info,
                       const viam::sdk::ProtoStruct& extra);
@@ -69,6 +70,7 @@ public:
     int sample_rate_;
     int num_channels_;
     static vsdk::Model model;
+    std::mutex playback_mu_;
 
     // The mutex protects the stream and playback buffer
     std::mutex stream_mu_;

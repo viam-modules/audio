@@ -102,4 +102,11 @@ int AudioCallback(const void *inputBuffer, void *outputBuffer,
                   void *userData);
 
 
+
+std::chrono::nanoseconds calculate_sample_timestamp(
+    const audio::InputStreamContext& ctx,
+    uint64_t sample_number);
+
+
+
 } // namespace microphone

@@ -139,21 +139,4 @@ OutputStreamContext::OutputStreamContext(
 {
 }
 
-
-std::chrono::nanoseconds calculate_sample_timestamp(
-    const AudioStreamContext& ctx,
-    uint64_t sample_number)
-{
-    // Convert sample_number to frame number (samples include all channels)
-    uint64_t frame_number = sample_number / ctx.info.num_channels;
-    uint64_t elapsed_ns = (frame_number * NANOSECONDS_PER_SECOND) / ctx.info.sample_rate_hz;
-
-    auto elapsed_duration = std::chrono::nanoseconds(elapsed_ns);
-    auto absolute_time = ctx.stream_start_time + elapsed_duration;
-
-    return std::chrono::duration_cast<std::chrono::nanoseconds>(
-        absolute_time.time_since_epoch()
-    );
-}
-
 } // namespace audio

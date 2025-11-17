@@ -20,8 +20,8 @@ Microphone::Microphone(viam::sdk::Dependencies deps, viam::sdk::ResourceConfig c
 
     // Create audio context with actual sample rate/channels from params
     vsdk::audio_info info{vsdk::audio_codecs::PCM_16, stream_params.sample_rate, stream_params.num_channels};
-    int samples_per_chunk = stream_params.sample_rate * CHUNK_DURATION_SECONDS;
-    auto new_audio_context = std::make_shared<AudioStreamContext>(info, samples_per_chunk);
+    int samples_per_chunk = stream_params.sample_rate * audio::CHUNK_DURATION_SECONDS;
+    auto new_audio_context = std::make_shared<audio::InputStreamContext>(info, samples_per_chunk);
 
     // Set user_data to point to the audio context
     stream_params.user_data = new_audio_context.get();
@@ -137,7 +137,7 @@ void Microphone::reconfigure(const viam::sdk::Dependencies& deps, const viam::sd
         // Create audio context with actual sample rate/channels from params
         vsdk::audio_info info{vsdk::audio_codecs::PCM_16, params.sample_rate, params.num_channels};
         int samples_per_chunk = params.sample_rate * audio::CHUNK_DURATION_SECONDS;
-        auto new_audio_context = std::make_shared<audio::AudioStreamContext>(info, samples_per_chunk);
+        auto new_audio_context = std::make_shared<audio::InputStreamContext>(info, samples_per_chunk);
 
         // Set user_data to point to the audio context
         params.user_data = new_audio_context.get();
@@ -197,7 +197,7 @@ void Microphone::get_audio(std::string const& codec,
     uint64_t sequence = 0;
 
     // Track which context we're reading from to detect any device config changes
-    std::shared_ptr<audio::AudioStreamContext> stream_context;
+    std::shared_ptr<audio::InputStreamContext> stream_context;
     uint64_t read_position = 0;
 
     // Initialize read position to current write position to get most recent audio
@@ -222,7 +222,7 @@ void Microphone::get_audio(std::string const& codec,
         std::ostringstream buffer;
         buffer << "calculated invalid samples_per_chunk: " << samples_per_chunk <<
         " with sample rate: " << stream_sample_rate << " num channels: " << stream_num_channels
-        << " chunk duration seconds: " << CHUNK_DURATION_SECONDS;
+        << " chunk duration seconds: " << audio::CHUNK_DURATION_SECONDS;
         VIAM_SDK_LOG(error) << buffer.str();
         throw std::runtime_error(buffer.str());
     }
@@ -240,7 +240,7 @@ void Microphone::get_audio(std::string const& codec,
                     // Update sample rate and channels from new config
                     stream_sample_rate = sample_rate_;
                     stream_num_channels = num_channels_;
-                    samples_per_chunk = (stream_sample_rate * CHUNK_DURATION_SECONDS) * stream_num_channels;
+                    samples_per_chunk = (stream_sample_rate * audio::CHUNK_DURATION_SECONDS) * stream_num_channels;
                 }
                 // Switch to new context and reset read position
                 stream_context = audio_context_;
@@ -482,6 +482,23 @@ int AudioCallback(const void *inputBuffer, void *outputBuffer,
     }
 
     return paContinue;
+}
+
+
+std::chrono::nanoseconds calculate_sample_timestamp(
+    const audio::InputStreamContext& ctx,
+    uint64_t sample_number)
+{
+    // Convert sample_number to frame number (samples include all channels)
+    uint64_t frame_number = sample_number / ctx.info.num_channels;
+    uint64_t elapsed_ns = (frame_number * audio::NANOSECONDS_PER_SECOND) / ctx.info.sample_rate_hz;
+
+    auto elapsed_duration = std::chrono::nanoseconds(elapsed_ns);
+    auto absolute_time = ctx.stream_start_time + elapsed_duration;
+
+    return std::chrono::duration_cast<std::chrono::nanoseconds>(
+        absolute_time.time_since_epoch()
+    );
 }
 
 
