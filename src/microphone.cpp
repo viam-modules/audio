@@ -1,4 +1,6 @@
 #include "microphone.hpp"
+#include "audio_utils.hpp"
+#include "audio_stream.hpp"
 #include <thread>
 
 namespace microphone {
@@ -6,42 +8,56 @@ namespace microphone {
 Microphone::Microphone(viam::sdk::Dependencies deps, viam::sdk::ResourceConfig cfg,
                        audio::portaudio::PortAudioInterface* pa)
     : viam::sdk::AudioIn(cfg.name()), stream_(nullptr), pa_(pa), active_streams_(0) {
-        auto params = parseConfigAttributes(cfg);
-        setupStreamFromConfig(params);
-    }
 
-// Microphone destructor
+    auto cfg_params = audio::utils::parseConfigAttributes(cfg);
+
+    auto stream_params = audio::utils::setupStreamFromConfig(
+        cfg_params,
+        audio::utils::StreamDirection::Input,
+        AudioCallback,
+        pa_
+    );
+
+    // Create audio context with actual sample rate/channels from params
+    vsdk::audio_info info{vsdk::audio_codecs::PCM_16, stream_params.sample_rate, stream_params.num_channels};
+    int samples_per_chunk = stream_params.sample_rate * CHUNK_DURATION_SECONDS;
+    auto new_audio_context = std::make_shared<AudioStreamContext>(info, samples_per_chunk);
+
+    // Set user_data to point to the audio context
+    stream_params.user_data = new_audio_context.get();
+
+    // Set new configuration and start stream under lock
+    {
+        std::lock_guard<std::mutex> lock(stream_ctx_mu_);
+        device_name_ = stream_params.device_name;
+        device_index_ = stream_params.device_index;
+        sample_rate_ = stream_params.sample_rate;
+        num_channels_ = stream_params.num_channels;
+        latency_ = stream_params.latency_seconds;
+        audio_context_ = new_audio_context;
+
+        audio::utils::restart_stream(stream_, stream_params, pa_);
+    }
+}
+
 Microphone::~Microphone() {
-    if (stream_) {
-        Pa_StopStream(stream_);
-        Pa_CloseStream(stream_);
+       if (stream_) {
+          PaError err = Pa_StopStream(stream_);
+          if (err != paNoError) {
+              VIAM_SDK_LOG(error) << "Failed to stop stream in destructor: "
+                                 << Pa_GetErrorText(err);
+          }
+
+          err = Pa_CloseStream(stream_);
+          if (err != paNoError) {
+              VIAM_SDK_LOG(error) << "Failed to close stream in destructor: "
+                                 << Pa_GetErrorText(err);
+          }
     }
 }
 
 vsdk::Model Microphone::model("viam", "audio", "microphone");
 
-ConfigParams parseConfigAttributes(const viam::sdk::ResourceConfig& cfg) {
-    auto attrs = cfg.attributes();
-    ConfigParams params;
-
-    if (attrs.count("device_name")) {
-        params.device_name = *attrs.at("device_name").get<std::string>();
-    }
-
-    if (attrs.count("sample_rate")) {
-        params.sample_rate = static_cast<int>(*attrs.at("sample_rate").get<double>());
-    }
-
-    if (attrs.count("num_channels")) {
-        params.num_channels = static_cast<int>(*attrs.at("num_channels").get<double>());
-    }
-
-    if (attrs.count("latency")) {
-        params.latency_ms = *attrs.at("latency").get<double>();
-    }
-
-    return params;
-}
 
 std::vector<std::string> Microphone::validate(viam::sdk::ResourceConfig cfg) {
     auto attrs = cfg.attributes();
@@ -108,8 +124,36 @@ void Microphone::reconfigure(const viam::sdk::Dependencies& deps, const viam::sd
             }
         }
 
-        auto params = parseConfigAttributes(cfg);
-        setupStreamFromConfig(params);
+
+        auto cfg_params = audio::utils::parseConfigAttributes(cfg);
+
+        auto params = audio::utils::setupStreamFromConfig(
+            cfg_params,
+            audio::utils::StreamDirection::Input,
+            AudioCallback,
+            pa_
+        );
+
+        // Create audio context with actual sample rate/channels from params
+        vsdk::audio_info info{vsdk::audio_codecs::PCM_16, params.sample_rate, params.num_channels};
+        int samples_per_chunk = params.sample_rate * audio::CHUNK_DURATION_SECONDS;
+        auto new_audio_context = std::make_shared<audio::AudioStreamContext>(info, samples_per_chunk);
+
+        // Set user_data to point to the audio context
+        params.user_data = new_audio_context.get();
+
+        // Set new configuration and restart stream under lock
+        {
+            std::lock_guard<std::mutex> lock(stream_ctx_mu_);
+            device_name_ = params.device_name;
+            device_index_ = params.device_index;
+            sample_rate_ = params.sample_rate;
+            num_channels_ = params.num_channels;
+            latency_ = params.latency_seconds;
+            audio_context_ = new_audio_context;
+
+            audio::utils::restart_stream(stream_, params, pa_);
+        }
         VIAM_SDK_LOG(info) << "[reconfigure] Reconfigure completed successfully";
     } catch (const std::exception& e) {
         VIAM_SDK_LOG(error) << "[reconfigure] Reconfigure failed: " << e.what();
@@ -153,7 +197,7 @@ void Microphone::get_audio(std::string const& codec,
     uint64_t sequence = 0;
 
     // Track which context we're reading from to detect any device config changes
-    std::shared_ptr<AudioStreamContext> stream_context;
+    std::shared_ptr<audio::AudioStreamContext> stream_context;
     uint64_t read_position = 0;
 
     // Initialize read position to current write position to get most recent audio
@@ -173,7 +217,7 @@ void Microphone::get_audio(std::string const& codec,
         stream_sample_rate = sample_rate_;
         stream_num_channels = num_channels_;
     }
-    int samples_per_chunk = (stream_sample_rate * CHUNK_DURATION_SECONDS) * stream_num_channels;
+    int samples_per_chunk = (stream_sample_rate * audio::CHUNK_DURATION_SECONDS) * stream_num_channels;
     if (samples_per_chunk <= 0){
         std::ostringstream buffer;
         buffer << "calculated invalid samples_per_chunk: " << samples_per_chunk <<
@@ -290,7 +334,7 @@ std::vector<viam::sdk::GeometryConfig> Microphone::get_geometries(const viam::sd
 
 
 
-void Microphone::openStream(PaStream** stream) {
+void Microphone::openStream(PaStream*& stream) {
     audio::portaudio::RealPortAudio real_pa;
     const audio::portaudio::PortAudioInterface& audio_interface = pa_ ? *pa_ : real_pa;
 
@@ -328,7 +372,7 @@ void Microphone::openStream(PaStream** stream) {
                        << " and latency " << params.suggestedLatency << " seconds";
 
     err = audio_interface.openStream(
-        stream,
+        &stream,
         &params,              // input params
         NULL,                 // output params
         sample_rate_,
@@ -387,26 +431,59 @@ PaDeviceIndex findDeviceByName(const std::string& name, const audio::portaudio::
 
 }
 
-void Microphone::shutdownStream(PaStream* stream) {
-    audio::portaudio::RealPortAudio real_pa;
-    const audio::portaudio::PortAudioInterface& audio_interface = pa_ ? *pa_ : real_pa;
 
-    PaError err = audio_interface.stopStream(stream);
-    if (err < 0) {
-        std::ostringstream buffer;
-        buffer << "failed to stop the stream: " <<  Pa_GetErrorText(err);
-        VIAM_SDK_LOG(error) << "[shutdownStream] " << buffer.str();
-        throw std::runtime_error(buffer.str());
+/**
+ * PortAudio callback function - runs on real-time audio thread.
+ *  This function must not:
+ * - Allocate memory (malloc/new)
+ * - Access the file system
+ * - Call any functions that may block
+ * - Take unpredictable amounts of time to complete
+ *
+ */
+// outputBuffer used for playback of audio - unused for microphone
+int AudioCallback(const void *inputBuffer, void *outputBuffer,
+                             unsigned long framesPerBuffer,
+                             const PaStreamCallbackTimeInfo* timeInfo,
+                             PaStreamCallbackFlags statusFlags,
+                             void *userData)
+{
+    if (!userData) {
+        // something wrong, stop stream
+        return paAbort;
+    }
+    audio::InputStreamContext* ctx = static_cast<audio::InputStreamContext*>(userData);
+
+    if (!ctx) {
+        // something wrong, stop stream
+        return paAbort;
     }
 
-
-    err = audio_interface.closeStream(stream);
-    if (err < 0) {
-        std::ostringstream buffer;
-        buffer << "failed to close the stream: " <<  Pa_GetErrorText(err);
-        VIAM_SDK_LOG(error) << "[shutdownStream] " << buffer.str();
-        throw std::runtime_error(buffer.str());
+    if (inputBuffer == nullptr) {
+        return paContinue;
     }
+
+    const int16_t* input = static_cast<const int16_t*>(inputBuffer);
+
+    // First callback: establish anchor between PortAudio time and wall-clock time
+    if (!ctx->first_callback_captured.load()) {
+        // the inputBufferADCTime describes the time when the
+        // first sample of the input buffer was captured,
+        // synced with the clock of the device
+        ctx->first_sample_adc_time = timeInfo->inputBufferAdcTime;
+        ctx->stream_start_time = std::chrono::system_clock::now();
+        ctx->first_callback_captured.store(true);
+    }
+
+    int total_samples = framesPerBuffer * ctx->info.num_channels;
+
+    for (int i = 0; i < total_samples; ++i) {
+        ctx->write_sample(input[i]);
+    }
+
+    return paContinue;
 }
+
+
 
 } // namespace microphone

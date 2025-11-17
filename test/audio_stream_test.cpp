@@ -203,7 +203,7 @@ TEST_F(AudioStreamContextTest, CalculateSampleTimestamp) {
     context_->first_sample_adc_time = 1000.0;
     context_->stream_start_time = std::chrono::system_clock::now();
     context_->first_callback_captured.store(true);
-    context_->total_samples_written.store(0);
+    context_->reset();
 
     auto baseline_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
         context_->stream_start_time.time_since_epoch()
@@ -298,11 +298,11 @@ TEST_F(AudioStreamContextTest, CalculateSampleTimestamp) {
   TEST_F(AudioCallbackTest, TracksSamplesWritten) {
       std::vector<int16_t> samples = create_test_samples(100);
 
-      EXPECT_EQ(ctx->total_samples_written.load(), 0);
+      EXPECT_EQ(ctx->get_write_position(), 0);
       call_callback(samples);
-      EXPECT_EQ(ctx->total_samples_written.load(), 100);
+      EXPECT_EQ(ctx->get_write_position(), 100);
       call_callback(samples);
-      EXPECT_EQ(ctx->total_samples_written.load(), 200);
+      EXPECT_EQ(ctx->get_write_position(), 200);
   }
 
   TEST_F(AudioCallbackTest, HandlesNullInputBuffer) {

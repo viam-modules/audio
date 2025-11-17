@@ -42,7 +42,7 @@ protected:
         mock_device_info_.defaultLowOutputLatency = 0.01;
         mock_device_info_.defaultSampleRate = 44100.0;
         mock_device_info_.maxInputChannels = 2;
-        mock_device_info_.maxOutputChannels = 0;
+        mock_device_info_.maxOutputChannels = 2;
         mock_device_info_.name = testDeviceName;
 
         SetupDefaultPortAudioBehavior();

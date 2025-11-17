@@ -99,6 +99,41 @@ TEST_F(SpeakerTest, ValidateWithLatencyNotDouble) {
 }
 
 
+TEST_F(SpeakerTest, GetPropertiesReturnsCorrectValues) {
+    int sample_rate = 48000;
+    int num_channels = 2;
+
+    auto attributes = ProtoStruct{};
+    attributes["sample_rate"] = static_cast<double>(sample_rate);
+    attributes["num_channels"] = static_cast<double>(num_channels);
+
+    ResourceConfig config(
+        "rdk:component:audioout",
+        "",
+        test_name_,
+        attributes,
+        "",
+        Model("viam", "audio", "speaker"),
+        LinkConfig{},
+        log_level::info
+    );
+
+    Dependencies deps{};
+
+    speaker::Speaker speaker(deps, config, mock_pa_.get());
+
+    ProtoStruct extra{};
+    auto props = speaker.get_properties(extra);
+
+    EXPECT_EQ(props.sample_rate_hz, sample_rate);
+    EXPECT_EQ(props.num_channels, num_channels);
+    ASSERT_EQ(props.supported_codecs.size(), 1);
+    EXPECT_EQ(props.supported_codecs[0], viam::sdk::audio_codecs::PCM_16);
+
+}
+
+
+
 int main(int argc, char **argv) {
   ::testing::InitGoogleTest(&argc, argv);
   ::testing::AddGlobalTestEnvironment(new SpeakerTestEnvironment);

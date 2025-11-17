@@ -6,15 +6,16 @@
 #include <viam/sdk/resource/reconfigurable.hpp>
 #include "portaudio.h"
 #include "portaudio.hpp"
+#include "audio_stream.hpp"
 #include <memory>
 #include <string>
 #include <vector>
 #include <mutex>
 #include <atomic>
-#include <memory>
 
 namespace speaker {
 namespace vsdk = ::viam::sdk;
+
 
 struct SpeakerStreamConfig {
     PaDeviceIndex device_index;
@@ -32,14 +33,14 @@ struct SpeakerConfigParams {
     std::optional<double> latency_ms;
 };
 
-SpeakerConfigParams parseSpeakerConfigAttributes(const viam::sdk::ResourceConfig& cfg);
 
-void openSpeakerStream(PaStream** stream,
-                       const SpeakerStreamConfig& config,
-                       audio::portaudio::PortAudioInterface* pa = nullptr);
-void startSpeakerStream(PaStream* stream, audio::portaudio::PortAudioInterface* pa = nullptr);
-PaDeviceIndex findSpeakerDeviceByName(const std::string& name, audio::portaudio::PortAudioInterface* pa = nullptr);
-void shutdownSpeakerStream(PaStream* stream, audio::portaudio::PortAudioInterface* pa = nullptr);
+int speakerCallback(const void* inputBuffer,
+                     void* outputBuffer,
+                     unsigned long framesPerBuffer,
+                     const PaStreamCallbackTimeInfo* timeInfo,
+                     PaStreamCallbackFlags statusFlags,
+                     void* userData);
+
 
 
 class Speaker final : public viam::sdk::AudioOut, public viam::sdk::Reconfigurable {
@@ -65,12 +66,18 @@ public:
     // Member variables
     std::string device_name_;
     double latency_;
+    int sample_rate_;
+    int num_channels_;
     static vsdk::Model model;
 
     // The mutex protects the stream and playback buffer
     std::mutex stream_mu_;
+
     PaStream* stream_;
     audio::portaudio::PortAudioInterface* pa_;
+
+    // Audio context for speaker playback (includes buffer and playback position tracking)
+    std::shared_ptr<audio::OutputStreamContext> audio_context_;
 
 };
 

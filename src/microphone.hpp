@@ -7,6 +7,7 @@
 #include "portaudio.h"
 #include "portaudio.hpp"
 #include "audio_stream.hpp"
+#include "audio_utils.hpp"
 #include <memory>
 #include <string>
 #include <vector>
@@ -16,13 +17,6 @@
 
 namespace microphone {
 namespace vsdk = ::viam::sdk;
-
-struct ConfigParams {
-    std::string device_name;
-    std::optional<int> sample_rate;
-    std::optional<int> num_channels;
-    std::optional<double> latency_ms;
-};
 
 struct ActiveStreamConfig {
     std::string device_name;
@@ -40,7 +34,6 @@ struct ActiveStreamConfig {
     }
 };
 
-ConfigParams parseConfigAttributes(const viam::sdk::ResourceConfig& cfg);
 PaDeviceIndex findDeviceByName(const std::string& name, const audio::portaudio::PortAudioInterface& pa);
 
 
@@ -66,14 +59,10 @@ public:
     void reconfigure(const viam::sdk::Dependencies& deps, const viam::sdk::ResourceConfig& cfg);
 
     // internal functions, public for testing
-    void openStream(PaStream** stream);
+    void openStream(PaStream*& stream);
     void startStream(PaStream* stream);
     void shutdownStream(PaStream* stream);
 
-private:
-    void setupStreamFromConfig(const ConfigParams& params);
-
-public:
     // Member variables
     std::string device_name_;
     PaDeviceIndex device_index_;
@@ -85,12 +74,32 @@ public:
     // The mutex protects the stream, context, and the active streams counter
     std::mutex stream_ctx_mu_;
     PaStream* stream_;
-    std::shared_ptr<AudioStreamContext> audio_context_;
+    std::shared_ptr<audio::InputStreamContext> audio_context_;
     // This is null in production and used for testing to inject the mock portaudio functions
     const audio::portaudio::PortAudioInterface* pa_;
     // Count of active get_audio calls
     int active_streams_;
 };
+
+
+/**
+ * PortAudio callback function - runs on real-time audio thread.
+ *
+ * CRITICAL: This function must not:
+ * - Allocate memory (malloc/new)
+ * - Access the file system
+ * - Call any functions that may block
+ * - Take unpredictable amounts of time to complete
+ *
+ * From PortAudio docs: Do not allocate memory, access the file system,
+ * call library functions or call other functions from the stream callback
+ * that may block or take an unpredictable amount of time to complete.
+ */
+int AudioCallback(const void *inputBuffer, void *outputBuffer,
+                  unsigned long framesPerBuffer,
+                  const PaStreamCallbackTimeInfo* timeInfo,
+                  PaStreamCallbackFlags statusFlags,
+                  void *userData);
 
 
 } // namespace microphone

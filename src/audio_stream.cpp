@@ -5,33 +5,28 @@
 #include <stdexcept>
 #include <string>
 
-namespace microphone {
+namespace audio {
 
-AudioStreamContext::AudioStreamContext(
+AudioBuffer::AudioBuffer(
     const vsdk::audio_info& audio_info,
-    int samples_per_chunk,
     int buffer_duration_seconds)
     : audio_buffer(nullptr)
     , buffer_capacity(0)
     , info(audio_info)
-    , samples_per_chunk(samples_per_chunk)
-    , stream_start_time()
-    , first_sample_adc_time(0.0)
-    , first_callback_captured(false)
     , total_samples_written(0)
 {
     if (audio_info.sample_rate_hz <= 0) {
-        VIAM_SDK_LOG(error) << "[AudioStreamContext] sample_rate_hz must be positive, got: "
+        VIAM_SDK_LOG(error) << "[AudioBuffer] sample_rate_hz must be positive, got: "
                            << audio_info.sample_rate_hz;
         throw std::invalid_argument("sample_rate_hz must be positive");
     }
     if (audio_info.num_channels <= 0) {
-        VIAM_SDK_LOG(error) << "[AudioStreamContext] num_channels must be positive, got: "
+        VIAM_SDK_LOG(error) << "[AudioBuffer] num_channels must be positive, got: "
                            << audio_info.num_channels;
         throw std::invalid_argument("num_channels must be positive");
     }
     if (buffer_duration_seconds <= 0) {
-        VIAM_SDK_LOG(error) << "[AudioStreamContext] buffer_duration_seconds must be positive, got: "
+        VIAM_SDK_LOG(error) << "[AudioBuffer] buffer_duration_seconds must be positive, got: "
                            << buffer_duration_seconds;
         throw std::invalid_argument("buffer_duration_seconds must be positive");
     }
@@ -40,7 +35,7 @@ AudioStreamContext::AudioStreamContext(
     buffer_capacity = audio_info.sample_rate_hz * audio_info.num_channels * buffer_duration_seconds;
 
     if (buffer_capacity <= 0) {
-        VIAM_SDK_LOG(error) << "[AudioStreamContext] buffer_capacity must be positive, calculated: "
+        VIAM_SDK_LOG(error) << "[AudioBuffer] buffer_capacity must be positive, calculated: "
                            << buffer_capacity;
         throw std::invalid_argument("buffer_capacity must be positive");
     }
@@ -48,8 +43,8 @@ AudioStreamContext::AudioStreamContext(
     try {
         audio_buffer = std::make_unique<std::atomic<int16_t>[]>(buffer_capacity);
     } catch (const std::bad_alloc& e) {
-        VIAM_SDK_LOG(error) << "[AudioStreamContext] Failed to allocate audio buffer of size "
-                           << buffer_capacity << " samples: " << e.what();
+        VIAM_SDK_LOG(error) << "[AudioBuffer] Failed to allocate audio buffer of size "
+                           << buffer_capacity<< " samples: " << e.what();
         throw std::runtime_error("Failed to allocate audio buffer of size " +
                                  std::to_string(buffer_capacity) + " samples: " + e.what());
     }
@@ -60,7 +55,7 @@ AudioStreamContext::AudioStreamContext(
     }
 }
 
-void AudioStreamContext::write_sample(int16_t sample) noexcept {
+void AudioBuffer::write_sample(int16_t sample) noexcept {
     // Find current index of circular buffer
     uint64_t pos = total_samples_written.load(std::memory_order_relaxed);
     int index = pos % buffer_capacity;
@@ -72,7 +67,7 @@ void AudioStreamContext::write_sample(int16_t sample) noexcept {
     total_samples_written.fetch_add(1, std::memory_order_release);
 }
 
-int AudioStreamContext::read_samples(int16_t* buffer, int sample_count, uint64_t& read_position) noexcept {
+int AudioBuffer::read_samples(int16_t* buffer, int sample_count, uint64_t& read_position) noexcept {
     // memory_order_acquire synronizes with the release in write_sample,
     // ensuring all samples written up to the current_write_pos are visible
     uint64_t current_write_pos = total_samples_written.load(std::memory_order_acquire);
@@ -110,61 +105,40 @@ int AudioStreamContext::read_samples(int16_t* buffer, int sample_count, uint64_t
     return to_read;
 }
 
-uint64_t AudioStreamContext::get_write_position() const noexcept {
+uint64_t AudioBuffer::get_write_position() const noexcept {
     return total_samples_written.load(std::memory_order_acquire);
 }
 
-/**
- * PortAudio callback function - runs on real-time audio thread.
- *  This function must not:
- * - Allocate memory (malloc/new)
- * - Access the file system
- * - Call any functions that may block
- * - Take unpredictable amounts of time to complete
- *
- */
-// outputBuffer used for playback of audio - unused for microphone
-int AudioCallback(const void *inputBuffer, void *outputBuffer,
-                             unsigned long framesPerBuffer,
-                             const PaStreamCallbackTimeInfo* timeInfo,
-                             PaStreamCallbackFlags statusFlags,
-                             void *userData)
-{
-    if (!userData) {
-        // something wrong, stop stream
-        return paAbort;
+void AudioBuffer::reset() noexcept {
+    total_samples_written.store(0, std::memory_order_relaxed);
+
+    for (int i = 0; i < buffer_capacity; i++) {
+        audio_buffer[i].store(0, std::memory_order_relaxed);
     }
-    AudioStreamContext* ctx = static_cast<AudioStreamContext*>(userData);
-
-    if (!ctx) {
-        // something wrong, stop stream
-        return paAbort;
-    }
-
-    if (inputBuffer == nullptr) {
-        return paContinue;
-    }
-
-    const int16_t* input = static_cast<const int16_t*>(inputBuffer);
-
-    // First callback: establish anchor between PortAudio time and wall-clock time
-    if (!ctx->first_callback_captured.load()) {
-        // the inputBufferADCTime describes the time when the
-        // first sample of the input buffer was captured,
-        // synced with the clock of the device
-        ctx->first_sample_adc_time = timeInfo->inputBufferAdcTime;
-        ctx->stream_start_time = std::chrono::system_clock::now();
-        ctx->first_callback_captured.store(true);
-    }
-
-    int total_samples = framesPerBuffer * ctx->info.num_channels;
-
-    for (int i = 0; i < total_samples; ++i) {
-        ctx->write_sample(input[i]);
-    }
-
-    return paContinue;
 }
+
+// InputStreamContext implementation
+InputStreamContext::InputStreamContext(
+    const vsdk::audio_info& audio_info,
+    int samples_per_chunk,
+    int buffer_duration_seconds)
+    : AudioBuffer(audio_info, buffer_duration_seconds)
+    , samples_per_chunk(samples_per_chunk)
+    , stream_start_time()
+    , first_sample_adc_time(0.0)
+    , first_callback_captured(false)
+{
+}
+
+// OutputStreamContext implementation
+OutputStreamContext::OutputStreamContext(
+    const vsdk::audio_info& audio_info,
+    int buffer_duration_seconds)
+    : AudioBuffer(audio_info, buffer_duration_seconds)
+    , playback_position(0)
+{
+}
+
 
 std::chrono::nanoseconds calculate_sample_timestamp(
     const AudioStreamContext& ctx,
@@ -182,4 +156,4 @@ std::chrono::nanoseconds calculate_sample_timestamp(
     );
 }
 
-} // namespace microphone
+} // namespace audio

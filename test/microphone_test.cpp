@@ -77,7 +77,7 @@ protected:
         ctx->first_sample_adc_time = 0.0;
         ctx->stream_start_time = std::chrono::system_clock::now();
         ctx->first_callback_captured.store(true);
-        ctx->total_samples_written.store(0);
+        ctx->reset();
 
         // Optionally write samples
         for (int i = 0; i < num_samples; i++) {
@@ -567,7 +567,7 @@ TEST_F(MicrophoneTest, MultipleConcurrentGetAudioCalls) {
     mic.audio_context_->first_sample_adc_time = 0.0;
     mic.audio_context_->stream_start_time = std::chrono::system_clock::now();
     mic.audio_context_->first_callback_captured.store(true);
-    mic.audio_context_->total_samples_written.store(0);
+    mic.audio_context_->reset();
 
     // Write samples in background
     std::atomic<bool> stop_writing{false};
@@ -635,7 +635,7 @@ TEST_F(MicrophoneTest, GetAudioReceivesChunks) {
     ctx->first_sample_adc_time = 0.0;
     ctx->stream_start_time = std::chrono::system_clock::now();
     ctx->first_callback_captured.store(true);
-    ctx->total_samples_written.store(0);
+    ctx->reset();
 
     int chunks_received = 0;
     auto handler = [&](viam::sdk::AudioIn::audio_chunk&& chunk) {
@@ -674,7 +674,7 @@ TEST_F(MicrophoneTest, GetAudioHandlerCanStopEarly) {
     mic.audio_context_->first_sample_adc_time = 0.0;
     mic.audio_context_->stream_start_time = std::chrono::system_clock::now();
     mic.audio_context_->first_callback_captured.store(true);
-    mic.audio_context_->total_samples_written.store(0);
+    mic.audio_context_->reset();
 
     // Simulate real-time audio: write samples in background thread
     std::atomic<bool> stop_writing{false};
@@ -730,7 +730,7 @@ TEST_F(MicrophoneTest, TestOpenStreamSuccessDefaultDevice) {
                                       ::testing::_, ::testing::_,
                                       ::testing::_, ::testing::_))
         .WillOnce(::testing::Return(paNoError));
-    EXPECT_NO_THROW(mic.openStream(&stream));
+    EXPECT_NO_THROW(mic.openStream(stream));
 }
 
 
@@ -750,7 +750,7 @@ TEST_F(MicrophoneTest, TestOpenStreamSuccessSpecificDevice) {
                                     ::testing::_, ::testing::_,
                                     ::testing::_, ::testing::_))
         .WillOnce(::testing::Return(paNoError));
-    EXPECT_NO_THROW(mic.openStream(&stream));
+    EXPECT_NO_THROW(mic.openStream(stream));
 }
 
 
@@ -764,7 +764,7 @@ TEST_F(MicrophoneTest, TestOpenStreamFormatNotSupported) {
     PaStream* stream = nullptr;
     EXPECT_CALL(*mock_pa_, isFormatSupported(::testing::_, ::testing::_, ::testing::_))
         .WillOnce(::testing::Return(paInvalidDevice));
-    EXPECT_THROW(mic.openStream(&stream), std::runtime_error);
+    EXPECT_THROW(mic.openStream(stream), std::runtime_error);
 }
 
 TEST_F(MicrophoneTest, TestOpenStreamFails) {
@@ -779,7 +779,7 @@ TEST_F(MicrophoneTest, TestOpenStreamFails) {
                                     ::testing::_, ::testing::_, ::testing::_,
                                     ::testing::_, ::testing::_))
         .WillOnce(::testing::Return(paInvalidDevice));
-    EXPECT_THROW(mic.openStream(&stream), std::runtime_error);
+    EXPECT_THROW(mic.openStream(stream), std::runtime_error);
 }
 
 // AudioStreamContext validation tests
