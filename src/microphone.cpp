@@ -133,10 +133,10 @@ void Microphone::get_audio(std::string const& codec,
     // Validate codec is supported
     if (codec != vsdk::audio_codecs::PCM_16) {
         std::ostringstream buffer;
-        buffer "Unsupported codec: " + codec +
+        buffer << "Unsupported codec: " + codec +
             ". Supported codecs: pcm16";
         VIAM_SDK_LOG(error) << buffer.str();
-        throw std::runtime_error(buffer.str());
+        throw std::invalid_argument(buffer.str());
     }
 
     // Validate timestamp
@@ -555,11 +555,11 @@ uint64_t get_initial_read_position(const std::shared_ptr<AudioStreamContext>& st
     int64_t stream_start_timestamp_ns = stream_start_ns.time_since_epoch().count();
     if (previous_timestamp < stream_start_timestamp_ns) {
         std::ostringstream buffer;
-        buffer << "Requested timestamp is before stream started:
-        stream started at " << stream_start_timestamp_ns <<
+        buffer << "Requested timestamp is before stream started: stream started at "
+         << stream_start_timestamp_ns <<
         " requested: " << previous_timestamp;
         VIAM_SDK_LOG(error) << buffer.str();
-        throw std::invalid_argument(buffer.str());;
+        throw std::invalid_argument(buffer.str());
     }
 
     // Convert timestamp to sample position, then advance by 1
@@ -573,7 +573,7 @@ uint64_t get_initial_read_position(const std::shared_ptr<AudioStreamContext>& st
         std::ostringstream buffer;
         buffer << "requested timestamp " <<
         previous_timestamp <<
-        " is in the future  audio not yet captured"
+        " is in the future: audio not yet captured";
         VIAM_SDK_LOG(error) << buffer.str();
         throw std::invalid_argument(buffer.str());
     }
@@ -581,9 +581,9 @@ uint64_t get_initial_read_position(const std::shared_ptr<AudioStreamContext>& st
     // Validate timestamp is not too old (audio has been overwritten)
     if (current_write_pos > read_position + stream_context->buffer_capacity) {
         std::ostringstream buffer;
-        stream << "requested timestamp is too old - audio has been overwritten. "
+        buffer << "requested timestamp is too old - audio has been overwritten. "
                << "Buffer only holds " << BUFFER_DURATION_SECONDS << " seconds of audio history.";
-        VIAM_SDK_LOG(buffer.str())
+        VIAM_SDK_LOG(error) << buffer.str();
         throw std::invalid_argument(buffer.str());
     }
 
