@@ -1,10 +1,6 @@
 #include "microphone.hpp"
 #include "mp3_encoder.hpp"
 #include <thread>
-extern "C"
-{
-#include <libavcodec/avcodec.h>
-}
 
 namespace microphone {
 
@@ -39,17 +35,6 @@ public:
     }
 };
 
-class MP3EncoderGuard {
-    MP3EncoderContext& ctx_;
-public:
-    explicit MP3EncoderGuard(MP3EncoderContext& ctx) : ctx_(ctx) {}
-
-    ~MP3EncoderGuard() {
-        if (ctx_.ffmpeg_ctx) {
-            cleanup_mp3_encoder(ctx_);
-        }
-    }
-};
 
 
 ConfigParams parseConfigAttributes(const viam::sdk::ResourceConfig& cfg) {
@@ -156,6 +141,29 @@ viam::sdk::ProtoStruct Microphone::do_command(const viam::sdk::ProtoStruct& comm
     return viam::sdk::ProtoStruct();
 }
 
+static void convert_pcm16_to_pcm32(const int16_t* samples, int sample_count, std::vector<uint8_t>& output) {
+    // Convert int16 to int32 (left shift by 16 to preserve volume)
+    output.resize(sample_count * sizeof(int32_t));
+    int32_t* out = reinterpret_cast<int32_t*>(output.data());
+    for (int i = 0; i < sample_count; i++) {
+        out[i] = static_cast<int32_t>(samples[i]) << 16;
+    }
+}
+
+static void convert_pcm16_to_float32(const int16_t* samples, int sample_count, std::vector<uint8_t>& output) {
+    // Convert int16 to float32 (normalize to range -1.0 to 1.0)
+    output.resize(sample_count * sizeof(float));
+    float* out = reinterpret_cast<float*>(output.data());
+    for (int i = 0; i < sample_count; i++) {
+        out[i] = static_cast<float>(samples[i]) / 32768.0f;
+    }
+}
+
+static void copy_pcm16(const int16_t* samples, int sample_count, std::vector<uint8_t>& output) {
+    output.resize(sample_count * sizeof(int16_t));
+    std::memcpy(output.data(), samples, sample_count * sizeof(int16_t));
+}
+
 static void encode_audio_chunk(
     const std::string& codec,
     const int16_t* samples,
@@ -165,24 +173,13 @@ static void encode_audio_chunk(
     std::vector<uint8_t>& output_data)
 {
     if (codec == vsdk::audio_codecs::PCM_32) {
-        // Convert int16 to int32 (left shift by 16 to preserve volume)
-        output_data.resize(sample_count * sizeof(int32_t));
-        int32_t* output = reinterpret_cast<int32_t*>(output_data.data());
-        for (int i = 0; i < sample_count; i++) {
-            output[i] = static_cast<int32_t>(samples[i]) << 16;
-        }
+        convert_pcm16_to_pcm32(samples, sample_count, output_data);
     } else if (codec == vsdk::audio_codecs::PCM_32_FLOAT) {
-        // Convert int16 to float32 (normalize to range -1.0 to 1.0)
-        output_data.resize(sample_count * sizeof(float));
-        float* output = reinterpret_cast<float*>(output_data.data());
-        for (int i = 0; i < sample_count; i++) {
-            output[i] = static_cast<float>(samples[i]) / 32768.0f;
-        }
+        convert_pcm16_to_float32(samples, sample_count, output_data);
     } else if (codec == vsdk::audio_codecs::MP3) {
-        encode_mp3_samples(mp3_ctx, samples, sample_count, chunk_start_position, output_data);
+        buffer_and_encode_samples(mp3_ctx, samples, sample_count, chunk_start_position, output_data);
     } else {  // pcm16
-        output_data.resize(sample_count * sizeof(int16_t));
-        std::memcpy(output_data.data(), samples, sample_count * sizeof(int16_t));
+        copy_pcm16(samples, sample_count, output_data);
     }
 }
 
@@ -261,7 +258,6 @@ void Microphone::get_audio(std::string const& codec,
     }
 
     MP3EncoderContext mp3_ctx;
-    MP3EncoderGuard mp3_guard(mp3_ctx);
 
     // Initialize MP3 encoder if needed
     if (requested_codec == vsdk::audio_codecs::MP3) {
@@ -284,8 +280,6 @@ void Microphone::get_audio(std::string const& codec,
 
                     // Reinitialize MP3 encoder with new config if using MP3 codec
                     if (requested_codec == vsdk::audio_codecs::MP3) {
-                        std::vector<uint8_t> discarded_data;
-                        flush_mp3_encoder(mp3_ctx, discarded_data);
                         cleanup_mp3_encoder(mp3_ctx);
                         initialize_mp3_encoder(mp3_ctx, stream_sample_rate, stream_num_channels);
                         VIAM_SDK_LOG(info) << "Reinitialized MP3 encoder with new config";
@@ -324,12 +318,6 @@ void Microphone::get_audio(std::string const& codec,
         // Convert from int16 (captured format) to requested codec
         encode_audio_chunk(requested_codec, temp_buffer.data(), samples_read, chunk_start_position, mp3_ctx, chunk.audio_data);
 
-        // Skip sending empty chunks (can happen with MP3 due to encoder buffering)
-        if (codec == vsdk::audio_codecs::MP3 && chunk.audio_data.empty()) {
-            VIAM_SDK_LOG(info) << "Skipping empty MP3 chunk (encoder buffering)";
-            continue;
-        }
-
         chunk.info.codec = codec;
         chunk.info.sample_rate_hz = stream_sample_rate;
         chunk.info.num_channels = stream_num_channels;
@@ -353,17 +341,18 @@ void Microphone::get_audio(std::string const& codec,
         }
 
         if (!chunk_handler(std::move(chunk))) {
-            VIAM_RESOURCE_LOG(info) << "Chunk handler returned false, stopping";
+            VIAM_RESOURCE_LOG(info) << "Chunk handler returned false, client disconnected";
             return;
         }
     }
 
-    // Flush MP3 encoder if needed and send any remaining data
-    if (codec == vsdk::audio_codecs::MP3 && mp3_ctx.ffmpeg_ctx) {
+    // Flush MP3 encoder at end of the stream
+    if (codec == vsdk::audio_codecs::MP3 && mp3_ctx.encoder) {
         std::vector<uint8_t> final_data;
         flush_mp3_encoder(mp3_ctx, final_data);
 
         if (!final_data.empty()) {
+            size_t final_data_size = final_data.size();
             vsdk::AudioIn::audio_chunk final_chunk;
             final_chunk.audio_data = std::move(final_data);
             final_chunk.info.codec = codec;
@@ -371,15 +360,12 @@ void Microphone::get_audio(std::string const& codec,
             final_chunk.info.num_channels = stream_num_channels;
             final_chunk.sequence_number = sequence++;
 
-            // Use the buffer_start_position which tracks where the buffered encoder data starts
-            // The end position is buffer_start + remaining buffered samples
-            uint64_t buffered_samples = mp3_ctx.buffer.size();
-            final_chunk.start_timestamp_ns = calculate_sample_timestamp(*stream_context, mp3_ctx.buffer_start_position);
-            final_chunk.end_timestamp_ns = calculate_sample_timestamp(*stream_context, mp3_ctx.buffer_start_position + buffered_samples);
+            // Calculate timestamps for the flushed data
+            final_chunk.start_timestamp_ns = calculate_sample_timestamp(*stream_context, mp3_ctx.total_samples_encoded);
+            final_chunk.end_timestamp_ns = calculate_sample_timestamp(*stream_context, read_position);
 
             chunk_handler(std::move(final_chunk));
-            VIAM_SDK_LOG(info) << "Sent final MP3 flush chunk with " << buffered_samples
-                               << " buffered samples (sequence=" << final_chunk.sequence_number << ")";
+            VIAM_SDK_LOG(debug) << "Sent final MP3 flush chunk with " << final_data_size << " bytes";
         }
     }
 

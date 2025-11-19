@@ -18,7 +18,7 @@ add_executable(audio-module
 find_package(viam-cpp-sdk REQUIRED)
 find_package(Threads REQUIRED)
 find_package(PkgConfig REQUIRED)
-find_package(FFMPEG REQUIRED)
+find_package(libmp3lame REQUIRED)
 
 pkg_check_modules(PORTAUDIO REQUIRED portaudio-2.0)
 
@@ -49,9 +49,7 @@ target_link_libraries(audio-module
 PRIVATE Threads::Threads
 PRIVATE viam-cpp-sdk::viamsdk
 PRIVATE ${PORTAUDIO_STATIC_LIB}
-PRIVATE ffmpeg::avcodec
-PRIVATE ffmpeg::avformat
-PRIVATE ffmpeg::avutil
+PRIVATE libmp3lame::libmp3lame
 )
 
 # Link platform-specific dependencies

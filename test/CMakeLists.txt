@@ -23,9 +23,7 @@ function(audio_add_gtest SOURCE_FILE_NAME)
         GTest::gmock
         viam-cpp-sdk::viamsdk
         ${PORTAUDIO_STATIC_LIB}
-        ffmpeg::avcodec
-        ffmpeg::avformat
-        ffmpeg::avutil
+        libmp3lame::libmp3lame
     )
 
     # Link platform-specific dependencies for static PortAudio
