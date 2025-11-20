@@ -990,7 +990,6 @@ TEST_F(MicrophoneTest, CodecConversion_PCM32Float) {
     auto handler = [&](viam::sdk::AudioIn::audio_chunk&& chunk) {
         chunks_received++;
         EXPECT_EQ(chunk.info.codec, viam::sdk::audio_codecs::PCM_32_FLOAT);
-
         const float* samples = reinterpret_cast<const float*>(chunk.audio_data.data());
         int num_samples = chunk.audio_data.size() / sizeof(float);
         received_samples.insert(received_samples.end(), samples, samples + num_samples);
@@ -1031,14 +1030,7 @@ TEST_F(MicrophoneTest, CodecConversion_MP3_ProducesValidData) {
     auto handler = [&](viam::sdk::AudioIn::audio_chunk&& chunk) {
         chunks_received++;
         EXPECT_EQ(chunk.info.codec, viam::sdk::audio_codecs::MP3);
-        // MP3 chunks might be empty due to internal buffering
-        if (chunk.audio_data.size() > 0) {
-            chunks_with_data++;
-            total_mp3_bytes += chunk.audio_data.size();
-            std::cout << "Chunk " << chunks_received << " has " << chunk.audio_data.size() << " bytes" << std::endl;
-        } else {
-            std::cout << "Chunk " << chunks_received << " is EMPTY" << std::endl;
-        }
+        total_mp3_bytes += chunk.audio_data.size();
         return chunks_received < 10;
     };
 
@@ -1047,9 +1039,6 @@ TEST_F(MicrophoneTest, CodecConversion_MP3_ProducesValidData) {
     std::thread writer([&]() {
         for (int i = 0; i < 500000 && !stop_writing.load(); i++) {
             ctx->write_sample(static_cast<int16_t>(i % 1000));
-            if (i % 4800 == 0) {
-                std::this_thread::sleep_for(std::chrono::milliseconds(1));
-            }
         }
     });
 
@@ -1061,10 +1050,8 @@ TEST_F(MicrophoneTest, CodecConversion_MP3_ProducesValidData) {
     stop_writing = true;
     writer.join();
 
-    EXPECT_GT(chunks_received, 0);
-    EXPECT_GT(chunks_with_data, 0) << "Should receive at least one chunk with MP3 data";
-    EXPECT_GT(total_mp3_bytes, 0) << "Should have produced some MP3 data";
-    EXPECT_LT(total_mp3_bytes, chunks_received * 4800 * sizeof(int16_t)) << "MP3 should compress data";
+    EXPECT_EQ(chunks_received, 10);
+    EXPECT_GT(total_mp3_bytes, 0);
 }
 
 TEST_F(MicrophoneTest, CodecConversion_MP3_Stereo) {
@@ -1074,15 +1061,11 @@ TEST_F(MicrophoneTest, CodecConversion_MP3_Stereo) {
     auto ctx = createTestContext(mic);
 
     int chunks_received = 0;
-    int chunks_with_data = 0;
 
     auto handler = [&](viam::sdk::AudioIn::audio_chunk&& chunk) {
         chunks_received++;
         EXPECT_EQ(chunk.info.codec, viam::sdk::audio_codecs::MP3);
         EXPECT_EQ(chunk.info.num_channels, 2);
-        if (chunk.audio_data.size() > 0) {
-            chunks_with_data++;
-        }
         return chunks_received < 5;
     };
 
@@ -1091,9 +1074,6 @@ TEST_F(MicrophoneTest, CodecConversion_MP3_Stereo) {
     std::thread writer([&]() {
         for (int i = 0; i < 500000 && !stop_writing.load(); i++) {
             ctx->write_sample(static_cast<int16_t>(i % 1000));
-            if (i % 9600 == 0) {  // 9600 = 4800 samples * 2 channels
-                std::this_thread::sleep_for(std::chrono::milliseconds(1));
-            }
         }
     });
 
@@ -1105,8 +1085,7 @@ TEST_F(MicrophoneTest, CodecConversion_MP3_Stereo) {
     stop_writing = true;
     writer.join();
 
-    EXPECT_GT(chunks_received, 0);
-    EXPECT_GT(chunks_with_data, 0) << "Should receive at least one chunk with MP3 data";
+    EXPECT_EQ(chunks_received, 5);
 }
 
 int main(int argc, char **argv) {

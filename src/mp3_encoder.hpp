@@ -33,8 +33,6 @@ struct MP3EncoderContext {
     int sample_rate = 0;
     int num_channels = 0;
 
-    uint64_t total_samples_encoded = 0;
-
     // LAME encoder delay (samples per channel added at start)
     int encoder_delay = 0;
 };

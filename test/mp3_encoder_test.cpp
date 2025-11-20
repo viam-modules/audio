@@ -48,7 +48,7 @@ TEST_F(MP3EncoderTest, InitializeSucceeds) {
 TEST_F(MP3EncoderTest, EncodeOneCompleteMp3Frame) {
     initialize_mp3_encoder(ctx_, 48000, 2);
 
-    auto samples = create_test_samples(1152 * 2);
+    auto samples = create_test_samples(MP3_FRAME_SIZE * 2);
     std::vector<uint8_t> output;
 
     encode_samples(ctx_, samples.data(), samples.size(), 0, output);
@@ -108,7 +108,7 @@ TEST_F(MP3EncoderTest, CleanupEncoder) {
 }
 
 TEST_F(MP3EncoderTest, EncodeWithoutInitialization) {
-    auto samples = create_test_samples(1152 * 2);
+    auto samples = create_test_samples(MP3_FRAME_SIZE * 2);
     std::vector<uint8_t> output;
 
     // Should throw because encoder is not initialized

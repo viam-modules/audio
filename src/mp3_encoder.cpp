@@ -22,7 +22,6 @@ static const char* lame_error_to_string(int error_code) {
     }
 }
 
-
 void initialize_mp3_encoder(MP3EncoderContext& ctx, int sample_rate, int num_channels) {
     ctx.sample_rate = sample_rate;
     ctx.num_channels = num_channels;
@@ -53,8 +52,8 @@ void initialize_mp3_encoder(MP3EncoderContext& ctx, int sample_rate, int num_cha
         throw std::runtime_error("Failed to initialize MP3 encoder parameters");
     }
 
-    // Get encoder delay - this is the number of samples (per channel) that LAME adds
-    // at the beginning due to its lookahead buffer
+    // Get encoder delay - this is the number of samples (per channel) that LAME
+    // buffers
     ctx.encoder_delay = lame_get_encoder_delay(ctx.encoder.get());
 
     VIAM_SDK_LOG(info) << "MP3 encoder initialized: " << sample_rate
@@ -72,8 +71,7 @@ void encode_samples(MP3EncoderContext& ctx,
         throw std::runtime_error("MP3 encoder not initialized");
     }
 
-    // With aligned chunks, sample_count should always be a multiple of MP3 frame size (1152 * num_channels)
-    // No buffering needed - encode directly with LAME
+    // With aligned chunks, sample_count should always be a multiple of MP3 frame size
     std::vector<int16_t> left_samples, right_samples;
 
     // Default to mono
@@ -89,8 +87,6 @@ void encode_samples(MP3EncoderContext& ctx,
         right_channel = right_samples.data();
         num_samples_per_channel = static_cast<int>(left_samples.size());
     }
-
-    VIAM_SDK_LOG(info) << "num_samples_per_channel: " << num_samples_per_channel;
 
     // Allocate output buffer: largest size is 1.25 * num_samples + 7200 (from LAME docs)
     int mp3buf_size = static_cast<int>(1.25 * num_samples_per_channel + 7200);
@@ -114,9 +110,6 @@ void encode_samples(MP3EncoderContext& ctx,
 
     // Resize to actual bytes written
     output_data.resize(old_size + bytes_written);
-
-    // Update position tracking
-    ctx.total_samples_encoded += sample_count;
 }
 
 void flush_mp3_encoder(MP3EncoderContext& ctx, std::vector<uint8_t>& output_data) {
@@ -139,13 +132,9 @@ void flush_mp3_encoder(MP3EncoderContext& ctx, std::vector<uint8_t>& output_data
 }
 
 void cleanup_mp3_encoder(MP3EncoderContext& ctx) {
-    // Reset smart pointers
     ctx.encoder.reset();
-
-    // Clear state
     ctx.sample_rate = 0;
     ctx.num_channels = 0;
-    ctx.total_samples_encoded = 0;
     ctx.encoder_delay = 0;
 }
 
