@@ -27,7 +27,7 @@ struct AudioStreamContext {
     vsdk::audio_info info;
     int samples_per_chunk;
 
-    std::chrono::system_clock::time_point stream_start_time;
+    std::chrono::steady_clock::time_point stream_start_time;
     double first_sample_adc_time;
     std::atomic<bool> first_callback_captured;
 

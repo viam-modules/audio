@@ -201,7 +201,7 @@ TEST_F(AudioStreamContextTest, ReadSampleNotYetWritten) {
 TEST_F(AudioStreamContextTest, CalculateSampleTimestamp) {
     // Set up the baseline time
     context_->first_sample_adc_time = 1000.0;
-    context_->stream_start_time = std::chrono::system_clock::now();
+    context_->stream_start_time = std::chrono::steady_clock::now();
     context_->first_callback_captured.store(true);
     context_->total_samples_written.store(0);
 
