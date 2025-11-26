@@ -91,7 +91,8 @@ protected:
     ResourceConfig createConfig(const std::string& device_name = testDeviceName,
                                 int sample_rate = 44100,
                                 int num_channels = 1,
-                                double latency = 0.0) {
+                                double latency = 0.0,
+                                int historical_throttle_ms = -1) {
         auto attrs = ProtoStruct{};
         if (!device_name.empty()) {
             attrs["device_name"] = device_name;
@@ -100,6 +101,9 @@ protected:
         attrs["num_channels"] = static_cast<double>(num_channels);
         if (latency > 0) {
             attrs["latency"] = latency;
+        }
+        if (historical_throttle_ms >= 0) {
+            attrs["historical_throttle_ms"] = static_cast<double>(historical_throttle_ms);
         }
 
         return ResourceConfig(
@@ -190,6 +194,7 @@ TEST_F(MicrophoneTest, ValidateWithValidOptionalAttributes) {
   attributes["sample_rate"] = 44100;
   attributes["num_channels"] = 1;
   attributes["latency"] = 1.0;
+  attributes["historical_throttle_ms"] = 60;
 
   ResourceConfig valid_config(
       "rdk:component:microphone", "", test_name_, attributes, "",
@@ -248,6 +253,34 @@ TEST_F(MicrophoneTest, ValidateWithInvalidConfig_LatencyNegative) {
   auto attributes = ProtoStruct{};
   attributes["device_name"] = test_mic_name_;
   attributes["latency"] = -10.0;
+
+  ResourceConfig invalid_config(
+      "rdk:component:microphone", "", test_name_, attributes, "",
+      Model("viam", "audio", "mic"), LinkConfig{}, log_level::info);
+
+  EXPECT_THROW(
+      { microphone::Microphone::validate(invalid_config); },
+      std::invalid_argument);
+}
+
+TEST_F(MicrophoneTest, ValidateWithInvalidConfig_HistoricalThrottleNotDouble) {
+  auto attributes = ProtoStruct{};
+  attributes["device_name"] = test_mic_name_;
+  attributes["historical_throttle_ms"] = "50";
+
+  ResourceConfig invalid_config(
+      "rdk:component:microphone", "", test_name_, attributes, "",
+      Model("viam", "audio", "mic"), LinkConfig{}, log_level::info);
+
+  EXPECT_THROW(
+      { microphone::Microphone::validate(invalid_config); },
+      std::invalid_argument);
+}
+
+TEST_F(MicrophoneTest, ValidateWithInvalidConfig_HistoricalThrottleNegative) {
+  auto attributes = ProtoStruct{};
+  attributes["device_name"] = test_mic_name_;
+  attributes["historical_throttle_ms"] = -10.0;
 
   ResourceConfig invalid_config(
       "rdk:component:microphone", "", test_name_, attributes, "",
@@ -376,6 +409,52 @@ TEST_F(MicrophoneTest, DefaultsToZeroLatencyWhenNotSpecified) {
     Dependencies deps{};
     microphone::Microphone mic(deps, config, mock_pa_.get());
     EXPECT_DOUBLE_EQ(mic.latency_, 0.01);
+}
+
+TEST_F(MicrophoneTest, DefaultsToFiftyMsHistoricalThrottleWhenNotSpecified) {
+    auto attributes = ProtoStruct{};
+    attributes["sample_rate"] = 44100.0;
+    attributes["num_channels"] = 1.0;
+    // No historical_throttle_ms specified
+
+    ResourceConfig config(
+        "rdk:component:audioin",
+        "",
+        "test_microphone",
+        attributes,
+        "",
+        Model("viam", "audio", "microphone"),
+        LinkConfig{},
+        log_level::info
+    );
+
+    Dependencies deps{};
+    microphone::Microphone mic(deps, config, mock_pa_.get());
+    EXPECT_EQ(mic.historical_throttle_ms_, microphone::DEFAULT_HISTORICAL_THROTTLE_MS);
+}
+
+TEST_F(MicrophoneTest, SetsHistoricalThrottleFromConfig) {
+    int test_throttle_ms = 100;
+
+    auto attributes = ProtoStruct{};
+    attributes["sample_rate"] = 44100.0;
+    attributes["num_channels"] = 1.0;
+    attributes["historical_throttle_ms"] = static_cast<double>(test_throttle_ms);
+
+    ResourceConfig config(
+        "rdk:component:audioin",
+        "",
+        "test_microphone",
+        attributes,
+        "",
+        Model("viam", "audio", "microphone"),
+        LinkConfig{},
+        log_level::info
+    );
+
+    Dependencies deps{};
+    microphone::Microphone mic(deps, config, mock_pa_.get());
+    EXPECT_EQ(mic.historical_throttle_ms_, test_throttle_ms);
 }
 
 TEST_F(MicrophoneTest, UsesDeviceDefaultSampleRate) {

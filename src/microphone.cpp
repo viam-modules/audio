@@ -40,6 +40,10 @@ ConfigParams parseConfigAttributes(const viam::sdk::ResourceConfig& cfg) {
         params.latency_ms = *attrs.at("latency").get<double>();
     }
 
+    if (attrs.count("historical_throttle_ms")) {
+        params.historical_throttle_ms = static_cast<int>(*attrs.at("historical_throttle_ms").get<double>());
+    }
+
     return params;
 }
 
@@ -85,6 +89,18 @@ std::vector<std::string> Microphone::validate(viam::sdk::ResourceConfig cfg) {
         if (latency_ms < 0) {
             VIAM_SDK_LOG(error) << "[validate] latency must be non-negative";
             throw std::invalid_argument("latency must be non-negative");
+        }
+    }
+
+    if(attrs.count("historical_throttle_ms")) {
+        if (!attrs["historical_throttle_ms"].is_a<double>()) {
+            VIAM_SDK_LOG(error) << "[validate] historical_throttle_ms attribute must be a number";
+            throw std::invalid_argument("historical_throttle_ms attribute must be a number");
+        }
+        double historical_throttle_ms = *attrs.at("historical_throttle_ms").get<double>();
+        if (historical_throttle_ms < 0) {
+            VIAM_SDK_LOG(error) << "[validate] historical_throttle_ms must be non-negative";
+            throw std::invalid_argument("historical_throttle_ms must be non-negative");
         }
     }
     return {};
@@ -165,10 +181,12 @@ void Microphone::get_audio(std::string const& codec,
     // Get sample rate and channels - will be updated if context changes
     int stream_sample_rate = 0;
     int stream_num_channels = 0;
+    int stream_historical_throttle_ms = 0;
     {
         std::lock_guard<std::mutex> lock(stream_ctx_mu_);
         stream_sample_rate = sample_rate_;
         stream_num_channels = num_channels_;
+        stream_historical_throttle_ms = historical_throttle_ms_;
     }
 
     int samples_per_chunk = (stream_sample_rate * CHUNK_DURATION_SECONDS) * stream_num_channels;
@@ -195,6 +213,7 @@ void Microphone::get_audio(std::string const& codec,
                     stream_sample_rate = sample_rate_;
                     stream_num_channels = num_channels_;
                     samples_per_chunk = (stream_sample_rate * CHUNK_DURATION_SECONDS) * stream_num_channels;
+                    stream_historical_throttle_ms = historical_throttle_ms_;
                 }
                 // Switch to new context and reset read position
                 stream_context = audio_context_;
@@ -275,7 +294,7 @@ void Microphone::get_audio(std::string const& codec,
             uint64_t one_second_samples = stream_sample_rate * stream_num_channels;
             if (distance_behind > one_second_samples) {
                 // Throttle historical data to give clients time to process
-                std::this_thread::sleep_for(std::chrono::milliseconds(50));
+                std::this_thread::sleep_for(std::chrono::milliseconds(stream_historical_throttle_ms));
             }
         }
     }
@@ -354,6 +373,7 @@ void Microphone::setupStreamFromConfig(const ConfigParams& params) {
     double new_latency = params.latency_ms.has_value()
         ? params.latency_ms.value() / 1000.0  // Convert ms to seconds
         : deviceInfo->defaultLowInputLatency;
+    double new_historical_throttle_ms = params.historical_throttle_ms.value_or(DEFAULT_HISTORICAL_THROTTLE_MS);
 
     // Validate num_channels against device's max input channels
     if (new_num_channels > deviceInfo->maxInputChannels) {
@@ -389,6 +409,7 @@ void Microphone::setupStreamFromConfig(const ConfigParams& params) {
             sample_rate_ = new_sample_rate;
             num_channels_ = new_num_channels;
             latency_ = new_latency;
+            historical_throttle_ms_ = new_historical_throttle_ms;
             audio_context_ = new_audio_context;
         }
 
@@ -425,6 +446,7 @@ void Microphone::setupStreamFromConfig(const ConfigParams& params) {
         sample_rate_ = new_sample_rate;
         num_channels_ = new_num_channels;
         latency_ = new_latency;
+        historical_throttle_ms_ = new_historical_throttle_ms;
         audio_context_ = new_audio_context;
     }
 
