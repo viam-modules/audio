@@ -104,33 +104,34 @@ void encode_samples_to_mp3(MP3EncoderContext& ctx,
 
     int num_samples_per_channel = sample_count / ctx.num_channels;
     int mp3buf_size = static_cast<int>(1.25 * num_samples_per_channel + 7200);
-    size_t old_size = output_data.size();
-    output_data.resize(old_size + mp3buf_size);
+    size_t current_size = output_data.size();
+    output_data.resize(current_size + mp3buf_size);
 
     int bytes_written = 0;
 
-    if (ctx.num_channels == 1) {
-        // Mono: use lame_encode_buffer
-        bytes_written = lame_encode_buffer(
-            ctx.encoder.get(),
-            samples,              // left channel
-            nullptr,              // right channel (null for mono)
-            num_samples_per_channel,
-            output_data.data() + old_size,
-            mp3buf_size
-        );
-    } else if (ctx.num_channels == 2) {
-        // Stereo: use lame_encode_buffer_interleaved
-        bytes_written = lame_encode_buffer_interleaved(
-            ctx.encoder.get(),
-            samples,
-            num_samples_per_channel,
-            output_data.data() + old_size,
-            mp3buf_size
-        );
-    } else {
-        VIAM_SDK_LOG(error) << "Unsupported number of channels: " << ctx.num_channels;
-        throw std::invalid_argument("Only mono (1) and stereo (2) are supported");
+    switch(ctx.num_channels) {
+        case 1:
+            bytes_written = lame_encode_buffer(
+                ctx.encoder.get(),
+                samples,              // left channel
+                nullptr,              // right channel (null for mono)
+                num_samples_per_channel,
+                output_data.data() + current_size, // write new data starting at the end of the buffer
+                mp3buf_size
+            );
+        case 2:
+            bytes_written = lame_encode_buffer_interleaved(
+                ctx.encoder.get(),
+                samples,
+                num_samples_per_channel,
+                output_data.data() + current_size, // write new data starting at the end of the buffer
+                mp3buf_size
+            );
+            break;
+        default:
+            VIAM_SDK_LOG(error) << "Unsupported number of channels: " << ctx.num_channels
+            << "Only mono (1) and stereo (2) are supported";
+            throw std::invalid_argument("Unsupported number of channels, only mono (1) and stereo (2) are supported");
     }
 
     if (bytes_written < 0) {
