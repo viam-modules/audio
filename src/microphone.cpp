@@ -691,7 +691,7 @@ void Microphone::openStream(PaStream** stream) {
      VIAM_SDK_LOG(info) << "Opening stream for device '" << device_name_
                        << "' (index " << device_index_ << ")"
                        << " with sample rate " << sample_rate_
-                       << ", channels: " << num_channels_;
+                       << ", channels: " << num_channels_
                        << " and latency " << params.suggestedLatency << " seconds";
 
     err = audio_interface.openStream(
