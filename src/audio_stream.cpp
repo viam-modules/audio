@@ -178,7 +178,7 @@ int AudioCallback(const void *inputBuffer, void *outputBuffer,
         // first sample of the input buffer was captured,
         // synced with the clock of the device
         ctx->first_sample_adc_time = timeInfo->inputBufferAdcTime;
-        ctx->stream_start_time = std::chrono::steady_clock::now();
+        ctx->stream_start_time = std::chrono::system_clock::now();
         ctx->first_callback_captured.store(true);
     }
 
