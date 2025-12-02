@@ -439,7 +439,8 @@ void Microphone::get_audio(std::string const& codec,
                                << " seconds starting from timestamp " << first_chunk_start_timestamp_ns;
         }
 
-        // Check if we've read enough audio
+        // Check if we've read enough audio (only if duration limit is set)
+        if (duration_limit_set) {
             int64_t time_elapsed_ns = chunk.end_timestamp_ns.count() - first_chunk_start_timestamp_ns;
             double time_elapsed_seconds = time_elapsed_ns / 1e9;
 
@@ -450,6 +451,7 @@ void Microphone::get_audio(std::string const& codec,
                 chunk_handler(std::move(chunk));
                 break;
             }
+        }
 
         if (!chunk_handler(std::move(chunk))) {
             // If the chunk callback returned false, the stream has ended
