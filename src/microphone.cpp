@@ -121,6 +121,8 @@ static int calculate_chunk_size(const AudioCodec codec, int sample_rate, int num
     }
 }
 
+// RAII guard to automatically increment and decrement the stream counter
+// during get_audio calls
 class StreamGuard {
     std::mutex& mutex_;
     int& counter_;
@@ -504,11 +506,6 @@ void Microphone::get_audio(std::string const& codec,
     }
 
     VIAM_SDK_LOG(debug) << "get_audio stream completed";
-
-    {
-        std::lock_guard<std::mutex> lock(stream_ctx_mu_);
-        active_streams_--;
-    }
 }
 
 viam::sdk::audio_properties Microphone::get_properties(const viam::sdk::ProtoStruct& extra){

@@ -4,6 +4,7 @@
 
 namespace microphone {
 
+
 // Helper function to convert MP3LAME initialization error codes to readable strings
 static const std::string mp3lame_init_error_to_string(int error_code) {
     switch (error_code) {
@@ -55,10 +56,8 @@ void initialize_mp3_encoder(MP3EncoderContext& ctx, int sample_rate, int num_cha
     lame_set_num_channels(ctx.encoder.get(), num_channels);
     // 192 kbps bit rate - how many bits of audio used to represent one second of audio
     // higher bitrate = better quality,larger file size
-    lame_set_brate(ctx.encoder.get(), 192);
-    // 2 = high quality (0=best, 9=worst).
-    // higher quality = slower
-    lame_set_quality(ctx.encoder.get(), 2);
+    lame_set_brate(ctx.encoder.get(), MP3_BIT_RATE);
+    lame_set_quality(ctx.encoder.get(), MP3_QUALITY);
 
 
     int init_result = lame_init_params(ctx.encoder.get());

@@ -10,6 +10,13 @@
 namespace microphone {
 namespace vsdk = ::viam::sdk;
 
+// 192 kbps bit rate - how many bits of audio used to represent one second of audio
+// higher bitrate = better quality,larger file size
+constexpr int MP3_BIT_RATE = 192;
+// (0=best, 9=worst)
+// higher quality = slower
+constexpr int MP3_QUALITY = 2;
+
 
 // Generic cleanup wrapper for functions with custom deleters
 template <auto cleanup_fp>
