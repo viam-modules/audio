@@ -49,4 +49,8 @@ jobs:
       - name: Build package and module
         run: |
           . ./venv/bin/activate
+          # Set PKG_CONFIG_PATH for Homebrew on macOS
+          if [ "${{ matrix.os }}" == "macos-latest" ]; then
+            export PKG_CONFIG_PATH="$(brew --prefix)/lib/pkgconfig:$PKG_CONFIG_PATH"
+          fi
           conan create . -o:a "viam-cpp-sdk/*:shared=False" -s:a build_type=Release -s:a compiler.cppstd=17 --build=missing -cc core:non_interactive=True

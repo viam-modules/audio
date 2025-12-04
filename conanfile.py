@@ -46,7 +46,6 @@ class audio(ConanFile):
         # should also be updated in `bin/setup.{sh,ps1}`.
         self.requires("viam-cpp-sdk/0.21.0")
         self.requires("libmp3lame/3.100")
-        self.requires("portaudio")
 
     def generate(self):
         tc = CMakeToolchain(self)
