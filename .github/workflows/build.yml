@@ -12,17 +12,17 @@ jobs:
       matrix:
         include:
           - os: macos-latest
-          - os: ubuntu-22.04
+          - os: ubuntu-latest
             container:
               image: ghcr.io/viamrobotics/rdk-devenv:amd64
               options: --platform linux/amd64
-          - os: ubuntu-22.04-arm
+          - os: buildjet-8vcpu-ubuntu-2204-arm
             container:
               image: ghcr.io/viamrobotics/rdk-devenv:arm64
               options: --platform linux/arm64
 
-    runs-on: \${{ matrix.os }}
-    container: \${{ matrix.container }}
+    runs-on: ${{ matrix.os }}
+    container: ${{ matrix.container }}
 
     steps:
       - name: Checkout code
