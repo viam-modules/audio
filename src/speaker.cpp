@@ -271,5 +271,4 @@ void Speaker::reconfigure(const vsdk::Dependencies& deps,
 
 }
 
-
 } // namespace speaker

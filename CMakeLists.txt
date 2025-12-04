@@ -12,6 +12,7 @@ add_executable(audio-module
     src/main.cpp
     src/microphone.cpp
     src/audio_stream.cpp
+    src/audio_codec.cpp
     src/speaker.cpp
     src/mp3_encoder.cpp
 )

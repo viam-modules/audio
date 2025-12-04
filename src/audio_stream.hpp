@@ -67,28 +67,4 @@ public:
 };
 
 
-// Calculate chunk size aligned to MP3 frame boundaries
-// Returns the number of samples (including all channels) for an optimal chunk size
-// mp3_frame_size should be the actual frame size from LAME (1152 or 576), defaults to 1152
-int calculate_aligned_chunk_size(int sample_rate, int num_channels, int mp3_frame_size = 1152);
-
-/**
- * PortAudio callback function - runs on real-time audio thread.
- *
- * CRITICAL: This function must not:
- * - Allocate memory (malloc/new)
- * - Access the file system
- * - Call any functions that may block
- * - Take unpredictable amounts of time to complete
- *
- * From PortAudio docs: Do not allocate memory, access the file system,
- * call library functions or call other functions from the stream callback
- * that may block or take an unpredictable amount of time to complete.
- */
-int AudioCallback(const void *inputBuffer, void *outputBuffer,
-                  unsigned long framesPerBuffer,
-                  const PaStreamCallbackTimeInfo* timeInfo,
-                  PaStreamCallbackFlags statusFlags,
-                  void *userData);
-
 } // namespace audio
