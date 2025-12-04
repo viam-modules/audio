@@ -1,6 +1,8 @@
 import os
-from io import StringIO
 import re
+import tarfile
+
+from tempfile import TemporaryDirectory
 
 from conan import ConanFile
 from conan.errors import ConanException
@@ -23,7 +25,7 @@ class audio(ConanFile):
         "shared": True
     }
 
-    exports_sources = "CMakeLists.txt", "LICENSE", "src/*"
+    exports_sources = "CMakeLists.txt", "LICENSE", "src/*", "test/*"
 
     def set_version(self):
         content = load(self, "CMakeLists.txt")
@@ -56,3 +58,26 @@ class audio(ConanFile):
 
     def layout(self):
         cmake_layout(self, src_folder=".")
+
+    def package(self):
+        cmake = CMake(self)
+        cmake.install()
+
+    def deploy(self):
+        self.output.info("Copying audio-module binary")
+        # The binary is in the build folder, not package folder since we don't have install() commands
+        binary_src = os.path.join(self.build_folder, "audio-module")
+        binary_dst = os.path.join(self.deploy_folder, "audio-module")
+        copy(self, "audio-module", src=self.build_folder, dst=self.deploy_folder)
+
+        self.output.info("Copying meta.json")
+        copy(self, "meta.json", src=self.source_folder, dst=self.deploy_folder)
+
+        self.output.info("Creating module.tar.gz")
+        with tarfile.open(os.path.join(self.deploy_folder, "module.tar.gz"), "w|gz") as tar:
+            tar.add(os.path.join(self.deploy_folder, "audio-module"), arcname="audio-module")
+            tar.add(os.path.join(self.source_folder, "meta.json"), arcname="meta.json")
+
+            self.output.debug("module.tar.gz contents:")
+            for mem in tar.getmembers():
+                self.output.debug(mem.name)
