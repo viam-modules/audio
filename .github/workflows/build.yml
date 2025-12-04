@@ -30,7 +30,7 @@ jobs:
 
       - name: Install deps (mac)
         if: matrix.os == 'macos-latest'
-        run: brew install python@3.11 portaudio-2.0
+        run: brew install python@3.11 portaudio
 
       - name: Install deps (linux)
         if: contains(matrix.os, 'ubuntu')
