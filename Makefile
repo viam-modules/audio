@@ -17,11 +17,6 @@ test: $(BIN)
 clean:
 	rm -rf build-conan/build/RelWithDebInfo module.tar.gz
 
-module.tar.gz: build meta.json
-	cp $(BIN) $(OUTPUT_NAME)
-	tar -czvf module.tar.gz \
-	    $(OUTPUT_NAME) meta.json
-
 setup:
 	bin/setup.sh
 
@@ -36,7 +31,7 @@ conan-pkg:
 	--build=missing
 
 
-module: conan-pkg meta.json
+module.tar.gz: conan-pkg meta.json
 	test -f ./venv/bin/activate && . ./venv/bin/activate; \
 	conan install --requires=viam-audio/0.0.1 \
 	-o:a "viam-cpp-sdk/*:shared=False" \
