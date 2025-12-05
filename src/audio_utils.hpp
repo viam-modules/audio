@@ -9,6 +9,22 @@
 namespace audio {
 namespace utils {
 
+// Generic cleanup wrapper for functions with custom deleters
+template <auto cleanup_fp>
+struct Cleanup {
+    using pointer_type = std::tuple_element_t<0, boost::callable_traits::args_t<decltype(cleanup_fp)>>;
+    using value_type = std::remove_pointer_t<pointer_type>;
+
+    void operator()(pointer_type p) {
+        if (p != nullptr) {
+            cleanup_fp(p);
+        }
+    }
+};
+
+template <auto cleanup_fp>
+using CleanupPtr = std::unique_ptr<typename Cleanup<cleanup_fp>::value_type, Cleanup<cleanup_fp>>;
+
 enum class StreamDirection { Input, Output };
 
 struct ConfigParams {
