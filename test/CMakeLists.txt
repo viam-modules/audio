@@ -14,7 +14,9 @@ function(audio_add_gtest SOURCE_FILE_NAME)
     add_executable(${TEST_EXECUTABLE_NAME}
         ${SOURCE_FILE_NAME}
         ${CMAKE_SOURCE_DIR}/src/microphone.cpp
+        ${CMAKE_SOURCE_DIR}/src/audio_codec.cpp
         ${CMAKE_SOURCE_DIR}/src/audio_stream.cpp
+        ${CMAKE_SOURCE_DIR}/src/speaker.cpp
         ${CMAKE_SOURCE_DIR}/src/mp3_encoder.cpp
     )
     target_link_libraries(${TEST_EXECUTABLE_NAME}
@@ -36,4 +38,6 @@ endfunction()
 
 audio_add_gtest(microphone_test.cpp)
 audio_add_gtest(audio_stream_test.cpp)
+audio_add_gtest(speaker_test.cpp)
+audio_add_gtest(audio_utils_test.cpp)
 audio_add_gtest(mp3_encoder_test.cpp)
