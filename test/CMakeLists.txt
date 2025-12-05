@@ -18,6 +18,7 @@ function(audio_add_gtest SOURCE_FILE_NAME)
         ${CMAKE_SOURCE_DIR}/src/audio_stream.cpp
         ${CMAKE_SOURCE_DIR}/src/speaker.cpp
         ${CMAKE_SOURCE_DIR}/src/mp3_encoder.cpp
+        ${CMAKE_SOURCE_DIR}/src/mp3_decoder.cpp
     )
     target_link_libraries(${TEST_EXECUTABLE_NAME}
         GTest::gtest

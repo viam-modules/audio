@@ -25,7 +25,6 @@ void initialize_mp3_decoder(MP3DecoderContext& ctx) {
     }
 
     ctx.decoder = std::move(hip);
-    ctx.initialized = true;
 
     VIAM_SDK_LOG(debug) << "MP3 decoder initialized";
 }
@@ -35,7 +34,7 @@ void decode_mp3_to_pcm16(
     const std::vector<uint8_t>& encoded_data,
     std::vector<uint8_t>& output_data) {
 
-    if (!ctx.decoder || !ctx.initialized) {
+    if (!ctx.decoder) {
         VIAM_SDK_LOG(error) << "decode_mp3_to_pcm16: MP3 decoder not initialized";
         throw std::runtime_error("decode_mp3_to_pcm16: MP3 decoder not initialized");
     }
@@ -53,21 +52,23 @@ void decode_mp3_to_pcm16(
     mp3data_struct mp3data;
     memset(&mp3data, 0, sizeof(mp3data));
 
-    // hip_decode needs non-const pointer
-    std::vector<unsigned char> mp3_data(encoded_data.begin(), encoded_data.end());
 
     // Feed data to decoder in chunks
     const size_t CHUNK_SIZE = 4096;  // Feed 4KB at a time
     size_t offset = 0;
 
-    while (offset < mp3_data.size()) {
-        size_t remaining = mp3_data.size() - offset;
-        size_t chunk = std::min(CHUNK_SIZE, remaining);
 
+    std::vector<uint8_t> audio_data(encoded_data.start(), encoded_data.end(), encoded_data.size());
+
+    while (offset < audio_data.size()) {
+        uint32_t remaining = audio_data.size() - offset;
+        uint32_t data_len = std::min(CHUNK_SIZE, remaining);
+
+        // This returns at most one frame with mp3 header data
         int decoded_samples = hip_decode1_headers(
             ctx.decoder.get(),
             mp3_data.data() + offset,
-            chunk,
+            data_len,
             pcm_l.data(),
             pcm_r.data(),
             &mp3data);
@@ -83,14 +84,14 @@ void decode_mp3_to_pcm16(
             ctx.sample_rate = mp3data.samplerate;
             ctx.num_channels = mp3data.stereo;
 
-            VIAM_SDK_LOG(debug) << "MP3 stream properties: " << ctx.sample_rate << "Hz, "
+            VIAM_SDK_LOG(debug) << "MP3 audio properties: " << ctx.sample_rate << "Hz, "
                                 << ctx.num_channels << " channels";
         }
 
         // Append decoded samples to output (interleaved for stereo)
         if (decoded_samples > 0) {
-            size_t current_size = output_data.size();
-            size_t samples_to_add = decoded_samples * ctx.num_channels;
+            uint32_t current_size = output_data.size();
+            uint32_t samples_to_add = decoded_samples * ctx.num_channels;
             output_data.resize(current_size + samples_to_add * sizeof(int16_t));
 
             int16_t* output_ptr = reinterpret_cast<int16_t*>(output_data.data() + current_size);
