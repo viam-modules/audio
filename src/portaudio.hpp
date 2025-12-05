@@ -59,107 +59,80 @@ class RealPortAudio : public PortAudioInterface {
                        PaStreamCallback* streamCallback,
                        void* userData) const override {
         return Pa_OpenStream(stream, inputParameters, outputParameters, sampleRate, framesPerBuffer, streamFlags, streamCallback, userData);
-        PaError openStream(PaStream * *stream,
-                           const PaStreamParameters* inputParameters,
-                           const PaStreamParameters* outputParameters,
-                           double sampleRate,
-                           unsigned long framesPerBuffer,
-                           PaStreamFlags streamFlags,
-                           PaStreamCallback* streamCallback,
-                           void* userData) const override {
-            return Pa_OpenStream(
-                stream, inputParameters, outputParameters, sampleRate, framesPerBuffer, streamFlags, streamCallback, userData);
-        }
+    }
 
-        PaError startStream(PaStream * stream) const override {
-            return Pa_StartStream(stream);
-        }
-        PaError startStream(PaStream * stream) const override {
-            return Pa_StartStream(stream);
-        }
+    PaError startStream(PaStream* stream) const override {
+        return Pa_StartStream(stream);
+    }
 
-        PaError terminate() const override {
-            return Pa_Terminate();
-        }
-        PaError terminate() const override {
-            return Pa_Terminate();
-        }
+    PaError terminate() const override {
+        return Pa_Terminate();
+    }
 
-        PaError stopStream(PaStream * stream) const override {
-            return Pa_StopStream(stream);
-        }
-        PaError stopStream(PaStream * stream) const override {
-            return Pa_StopStream(stream);
-        }
+    PaError stopStream(PaStream* stream) const override {
+        return Pa_StopStream(stream);
+    }
 
-        PaError closeStream(PaStream * stream) const override {
-            return Pa_CloseStream(stream);
-        }
-        PaError closeStream(PaStream * stream) const override {
-            return Pa_CloseStream(stream);
-        }
+    PaError closeStream(PaStream* stream) const override {
+        return Pa_CloseStream(stream);
+    }
 
-        PaDeviceIndex getDeviceCount() const override {
-            return Pa_GetDeviceCount();
+    PaDeviceIndex getDeviceCount() const override {
+        return Pa_GetDeviceCount();
+    }
+
+    const PaStreamInfo* getStreamInfo(PaStream* stream) const override {
+        return Pa_GetStreamInfo(stream);
+    }
+
+    PaError isFormatSupported(const PaStreamParameters* inputParameters,
+                              const PaStreamParameters* outputParameters,
+                              double sampleRate) const override {
+        return Pa_IsFormatSupported(inputParameters, outputParameters, sampleRate);
+    }
+};
+
+inline void startPortAudio(const audio::portaudio::PortAudioInterface* pa = nullptr) {
+    audio::portaudio::RealPortAudio real_pa;
+    const audio::portaudio::PortAudioInterface& audio_interface = pa ? *pa : real_pa;
+
+    PaError err = audio_interface.initialize();
+    if (err != 0) {
+        std::ostringstream buffer;
+        buffer << "Failed to initialize PortAudio library: " << Pa_GetErrorText(err);
+        VIAM_SDK_LOG(error) << "[startPortAudio] " << buffer.str();
+        throw std::runtime_error(buffer.str());
+    }
+
+    int numDevices = Pa_GetDeviceCount();
+    VIAM_SDK_LOG(info) << "Available input devices:";
+
+    for (int i = 0; i < numDevices; i++) {
+        const PaDeviceInfo* info = Pa_GetDeviceInfo(i);
+        if (!info) {
+            VIAM_SDK_LOG(error) << "failed to get device info for " << i + 1 << "th device";
+            continue;
         }
-        PaDeviceIndex getDeviceCount() const override {
-            return Pa_GetDeviceCount();
-        }
-
-        const PaStreamInfo* getStreamInfo(PaStream * stream) const override {
-            return Pa_GetStreamInfo(stream);
-        }
-        const PaStreamInfo* getStreamInfo(PaStream * stream) const override {
-            return Pa_GetStreamInfo(stream);
-        }
-
-        PaError isFormatSupported(const PaStreamParameters* inputParameters, const PaStreamParameters* outputParameters, double sampleRate)
-            const override {
-            return Pa_IsFormatSupported(inputParameters, outputParameters, sampleRate);
-        }
-    };
-
-    inline void startPortAudio(const audio::portaudio::PortAudioInterface* pa = nullptr) {
-        audio::portaudio::RealPortAudio real_pa;
-        const audio::portaudio::PortAudioInterface& audio_interface = pa ? *pa : real_pa;
-
-        PaError err = audio_interface.initialize();
-        if (err != 0) {
-            std::ostringstream buffer;
-            buffer << "Failed to initialize PortAudio library: " << Pa_GetErrorText(err);
-            VIAM_SDK_LOG(error) << "[startPortAudio] " << buffer.str();
-            throw std::runtime_error(buffer.str());
-        }
-
-        int numDevices = Pa_GetDeviceCount();
-        VIAM_SDK_LOG(info) << "Available input devices:";
-
-        for (int i = 0; i < numDevices; i++) {
-            const PaDeviceInfo* info = Pa_GetDeviceInfo(i);
-            if (!info) {
-                VIAM_SDK_LOG(error) << "failed to get device info for " << i + 1 << "th device";
-                continue;
-            }
-            if (info->maxInputChannels > 0) {
-                VIAM_SDK_LOG(info) << info->name << " default sample rate: " << info->defaultSampleRate
-                                   << "max input channels: " << info->maxInputChannels;
-            }
-        }
-
-        VIAM_SDK_LOG(info) << "Available output devices:";
-
-        for (int i = 0; i < numDevices; i++) {
-            const PaDeviceInfo* info = Pa_GetDeviceInfo(i);
-            if (!info) {
-                VIAM_SDK_LOG(error) << "failed to get device info for " << i + 1 << "th device";
-                continue;
-            }
-            if (info->maxOutputChannels > 0) {
-                VIAM_SDK_LOG(info) << info->name << " default sample rate: " << info->defaultSampleRate
-                                   << "max input channels: " << info->maxOutputChannels;
-            }
+        if (info->maxInputChannels > 0) {
+            VIAM_SDK_LOG(info) << info->name << " default sample rate: " << info->defaultSampleRate
+                               << "max input channels: " << info->maxInputChannels;
         }
     }
+
+    VIAM_SDK_LOG(info) << "Available output devices:";
+
+    for (int i = 0; i < numDevices; i++) {
+        const PaDeviceInfo* info = Pa_GetDeviceInfo(i);
+        if (!info) {
+            VIAM_SDK_LOG(error) << "failed to get device info for " << i + 1 << "th device";
+            continue;
+        }
+        if (info->maxOutputChannels > 0) {
+            VIAM_SDK_LOG(info) << info->name << " default sample rate: " << info->defaultSampleRate
+                               << "max input channels: " << info->maxOutputChannels;
+        }
+    }
+}
 
 }  // namespace portaudio
 }  // namespace audio

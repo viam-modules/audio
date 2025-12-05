@@ -52,9 +52,6 @@ class Microphone final : public viam::sdk::AudioIn, public viam::sdk::Reconfigur
    public:
     Microphone(viam::sdk::Dependencies deps, viam::sdk::ResourceConfig cfg, audio::portaudio::PortAudioInterface* pa = nullptr);
 
-   public:
-    Microphone(viam::sdk::Dependencies deps, viam::sdk::ResourceConfig cfg, audio::portaudio::PortAudioInterface* pa = nullptr);
-
     ~Microphone();
 
     static std::vector<std::string> validate(viam::sdk::ResourceConfig cfg);

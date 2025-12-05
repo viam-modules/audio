@@ -14,8 +14,6 @@ namespace vsdk = ::viam::sdk;
 
 constexpr int BUFFER_DURATION_SECONDS = 30;     // How much audio history to keep in buffer
 constexpr double CHUNK_DURATION_SECONDS = 0.1;  // 100ms chunks (10 chunks per second)
-constexpr int BUFFER_DURATION_SECONDS = 30;     // How much audio history to keep in buffer
-constexpr double CHUNK_DURATION_SECONDS = 0.1;  // 100ms chunks (10 chunks per second)
 constexpr uint64_t NANOSECONDS_PER_SECOND = 1000000000ULL;
 constexpr float INT16_TO_FLOAT_SCALE = 1.0f / 32768.0f;  // Scale factor for converting int16 samples to float [-1.0, 1.0]
 
