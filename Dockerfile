@@ -41,10 +41,7 @@ RUN cmake --version
 RUN apt-get -y --no-install-recommends install \
     python3.10 \
     python3.10-venv \
-    python3-pip \
-    libasound-dev \
-    portaudio19-dev \
-    libmp3lame-dev
+    python3-pip
 
 
 RUN python3 -m pip install conan
