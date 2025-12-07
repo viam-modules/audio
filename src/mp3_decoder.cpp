@@ -26,7 +26,7 @@ void initialize_mp3_decoder(MP3DecoderContext& ctx) {
 
     ctx.decoder = std::move(hip);
 
-    VIAM_SDK_LOG(debug) << "MP3 decoder initialized";
+    VIAM_SDK_LOG(info) << "MP3 decoder initialized";
 }
 
 void decode_mp3_to_pcm16(
@@ -54,14 +54,14 @@ void decode_mp3_to_pcm16(
 
 
     // Feed data to decoder in chunks
-    const size_t CHUNK_SIZE = 4096;  // Feed 4KB at a time
+    const uint32_t CHUNK_SIZE = 4096;  // Feed 4KB at a time
     size_t offset = 0;
 
+    std::vector<uint8_t> mp3_data(encoded_data);
 
-    std::vector<uint8_t> audio_data(encoded_data.start(), encoded_data.end(), encoded_data.size());
 
-    while (offset < audio_data.size()) {
-        uint32_t remaining = audio_data.size() - offset;
+    while (offset < mp3_data.size()) {
+        uint32_t remaining = mp3_data.size() - offset;
         uint32_t data_len = std::min(CHUNK_SIZE, remaining);
 
         // This returns at most one frame with mp3 header data
@@ -104,7 +104,7 @@ void decode_mp3_to_pcm16(
             }
         }
 
-        offset += chunk;
+        offset += data_len;
     }
 
     // Flush decoder - repeatedly call with null/0 until no more samples
@@ -155,7 +155,6 @@ void cleanup_mp3_decoder(MP3DecoderContext& ctx) {
     ctx.decoder.reset();
     ctx.sample_rate = 0;
     ctx.num_channels = 0;
-    ctx.initialized = false;
 }
 
 }  // namespace speaker

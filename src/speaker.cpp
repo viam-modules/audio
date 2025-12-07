@@ -145,24 +145,26 @@ void Speaker::play(std::vector<uint8_t> const& audio_data,
     AudioCodec codec = audio::codec::parse_codec(codec_str);
 
     // Validate sample rate and channels match speaker configuration
-    std::lock_guard<std::mutex> lock(stream_mu_);
-    if (info->sample_rate_hz != sample_rate_) {
-        VIAM_SDK_LOG(error) << "Sample rate mismatch: speaker is configured for " << sample_rate_ << "Hz but audio is "
-                            << info->sample_rate_hz << "Hz";
-        throw std::invalid_argument("Sample rate mismatch: speaker is " + std::to_string(sample_rate_) + "Hz but audio is " +
-                                    std::to_string(info->sample_rate_hz) + "Hz");
-    }
-    if (info->num_channels != num_channels_) {
-        VIAM_SDK_LOG(error) << "Channel count mismatch: speaker is configured for " << num_channels_ << " channels but audio has "
-                            << info->num_channels << " channels";
-        throw std::invalid_argument("Channel count mismatch: speaker has " + std::to_string(num_channels_) +
-                                    " channels but audio has " + std::to_string(info->num_channels) + " channels");
+    {
+        std::lock_guard<std::mutex> lock(stream_mu_);
+        if (info->sample_rate_hz != sample_rate_) {
+            VIAM_SDK_LOG(error) << "Sample rate mismatch: speaker is configured for " << sample_rate_ << "Hz but audio is "
+                                << info->sample_rate_hz << "Hz";
+            throw std::invalid_argument("Sample rate mismatch: speaker is " + std::to_string(sample_rate_) + "Hz but audio is " +
+                                        std::to_string(info->sample_rate_hz) + "Hz");
+        }
+        if (info->num_channels != num_channels_) {
+            VIAM_SDK_LOG(error) << "Channel count mismatch: speaker is configured for " << num_channels_ << " channels but audio has "
+                                << info->num_channels << " channels";
+            throw std::invalid_argument("Channel count mismatch: speaker has " + std::to_string(num_channels_) +
+                                        " channels but audio has " + std::to_string(info->num_channels) + " channels");
+        }
     }
 
     MP3DecoderContext mp3_ctx;
     std::vector<uint8_t> decoded_data;
+    VIAM_SDK_LOG(info) << "codec is " << codec_str;
 
-    // Initialize MP3 decoder if needed
     if (codec == AudioCodec::MP3) {
         initialize_mp3_decoder(mp3_ctx);
         decode_mp3_to_pcm16(mp3_ctx, audio_data, decoded_data);
