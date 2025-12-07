@@ -272,8 +272,6 @@ void Microphone::get_audio(std::string const& codec,
         stream_historical_throttle_ms = historical_throttle_ms_;
     }
 
-    VIAM_SDK_LOG(info) << "throttle time" << stream_historical_throttle_ms;
-
     MP3EncoderContext mp3_ctx;
     uint64_t last_chunk_end_position;
 
