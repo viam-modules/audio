@@ -109,12 +109,12 @@ inline void startPortAudio(audio::portaudio::PortAudioInterface* pa = nullptr) {
     for (int i = 0; i < numDevices; i++) {
         const PaDeviceInfo* info = Pa_GetDeviceInfo(i);
         if (info->maxInputChannels > 0) {
-            VIAM_SDK_LOG(info) << info->name << " default sample rate: " << info->defaultSampleRate
+            VIAM_SDK_LOG(info) << "Microphone " << info->name << " default sample rate: " << info->defaultSampleRate
                                << "max input channels: " << info->maxInputChannels;
         }
         if (info->maxOutputChannels > 0) {
-            VIAM_SDK_LOG(info) << info->name << " default sample rate: " << info->defaultSampleRate
-                               << "max input channels: " << info->maxOutputChannels;
+            VIAM_SDK_LOG(info) << "Speaker "<< info->name << " default sample rate: " << info->defaultSampleRate
+                               << "max output channels: " << info->maxOutputChannels;
         }
     }
 }

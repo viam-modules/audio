@@ -26,88 +26,79 @@ std::vector<vsdk::ResourceConfig> AudioDiscovery::discover_resources(const vsdk:
 
     VIAM_SDK_LOG(info) << "Discovery found " << numDevices << " audio devices";
 
-    bool input;
-    bool output;
+    // Helper lambda to create device configs
+    auto create_device_config = [](const std::string& component_type,
+                                     const std::string& device_type,
+                                     const std::string& api,
+                                     const std::string& device_name,
+                                     double sample_rate,
+                                     int num_channels,
+                                     int count,
+                                     const vsdk::Model& model) -> vsdk::ResourceConfig {
+        try {
+            vsdk::ProtoStruct attributes;
+            attributes.emplace("device_name", device_name);
+            attributes.emplace("sample_rate", sample_rate);
+            attributes.emplace("num_channels", num_channels);
+
+            std::stringstream name;
+            name << device_type << "-" << count;
+
+            return vsdk::ResourceConfig(
+                component_type,
+                name.str(),
+                "viam",                // namespace
+                attributes,
+                api,
+                model,
+                vsdk::log_level::info
+            );
+        } catch (std::exception& e) {
+            std::stringstream buffer;
+            buffer << "Failed to create resource config for " << device_type
+                   << " device: " << device_name << " : " << e.what();
+            VIAM_SDK_LOG(error) << buffer.str();
+            throw std::runtime_error(buffer.str());
+        }
+    };
+
+    auto add_device_config = [&](const vsdk::Model& model,
+                                  const std::string& component_type,
+                                  const std::string& device_type,
+                                  const std::string& api,
+                                  const std::string& device_name,
+                                  double sample_rate,
+                                  int num_channels,
+                                  int& counter) {
+        ++counter;
+
+        std::stringstream deviceInfoString;
+        deviceInfoString << "discovered " << device_name
+                         << ", default sample rate: " << sample_rate
+                         << ", max channels: " << num_channels;
+        VIAM_SDK_LOG(debug) << deviceInfoString.str();
+
+        vsdk::ResourceConfig config = create_device_config(
+            component_type, device_type, api, device_name,
+            sample_rate, num_channels, counter, model
+        );
+        configs.push_back(config);
+    };
     int count_input = 0;
     int count_output = 0;
+
     for (int i = 0; i < numDevices; i++) {
-        input = false;
-        output = false;
         const PaDeviceInfo* info = Pa_GetDeviceInfo(i);
         std::string device_name = info->name;
         double sample_rate = info->defaultSampleRate;
-        int num_input_channels = 0;
-        int num_output_channels = 0;
 
         if (info->maxInputChannels > 0) {
-            input = true;
-            num_input_channels = info->maxInputChannels;
+            add_device_config(microphone::Microphone::model, "audio_in", "microphone", "rdk:component:audio_in",
+                            device_name, sample_rate, info->maxInputChannels, count_input);
         } else if (info->maxOutputChannels > 0) {
-            output = true;
-            num_output_channels = info->maxOutputChannels;
-        }
-
-        if (input) {
-            std::stringstream deviceInfoString;
-            deviceInfoString << "Microphone " << (i + 1) << " - Name: " << device_name << ", default sample rate:  " << sample_rate
-                             << ", max channels: " << num_input_channels;
-            VIAM_SDK_LOG(info) << deviceInfoString.str();
-            vsdk::ProtoStruct attributes;
-            attributes.emplace("device_name", device_name);
-            attributes.emplace("sample_rate", sample_rate);
-            attributes.emplace("num_channels", num_input_channels);
-
-            std::stringstream name;
-            ++count_input;
-            name << "microphone-" << count_input;
-
-            try {
-                vsdk::ResourceConfig config("audio_in",
-                                            std::move(name.str()),
-                                            "viam",
-                                            attributes,
-                                            "rdk:component:audio_in",
-                                            microphone::Microphone::model,
-                                            vsdk::log_level::info);
-                configs.push_back(config);
-            } catch (std::exception& e) {
-                std::stringstream buffer;
-                buffer << "Failed to create resource config for input device: " << device_name << " : " << e.what();
-                VIAM_SDK_LOG(error) << buffer.str();
-                throw std::runtime_error(buffer.str());
-            }
-        }
-        if (output) {
-            // TODO: rm when speaker is in
-            continue;
-            std::stringstream deviceInfoString;
-            deviceInfoString << "Speaker " << (i + 1) << " - Name: " << device_name << ", default sample rate:  " << sample_rate
-                             << ", max channels: " << num_output_channels;
-            VIAM_SDK_LOG(info) << deviceInfoString.str();
-
-            vsdk::ProtoStruct attributes;
-            attributes.emplace("device_name", device_name);
-            attributes.emplace("sample_rate", sample_rate);
-            attributes.emplace("num_channels", num_output_channels);
-
-            std::stringstream name;
-            ++count_output;
-            name << "speaker-" << count_output;
-            try {
-                vsdk::ResourceConfig config("audio-out",
-                                            std::move(name.str()),
-                                            "viam",
-                                            attributes,
-                                            "rdk:component:audio_out",
-                                            microphone::Microphone::model,
-                                            vsdk::log_level::info);
-                configs.push_back(config);
-            } catch (std::exception& e) {
-                std::stringstream buffer;
-                buffer << "Failed to create resource config for output device " << device_name << " : " << e.what();
-                VIAM_SDK_LOG(error) << buffer.str();
-                throw std::runtime_error(buffer.str());
-            }
+            // //TODO: change firm param to speaker model when speaker is in main
+            // add_device_config("Speaker", "audio_out", "speaker", "rdk:component:audio_out",
+            //                 device_name, sample_rate, info->maxOutputChannels, count_output);
         }
     }
 

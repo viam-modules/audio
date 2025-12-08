@@ -66,7 +66,7 @@ The microphone component supports reconfiguration - you can change stream attrib
 ## Model viam:audio:discovery
 
 This model is used to discover audio devices on your machine.
-No configuration is needed, cxpand the test card or look at the discovery control card to obtain configurations for all connected audio devices.
+No configuration is needed, expand the test card or look at the discovery control card to obtain configurations for all connected audio devices.
 
 ## Setup
 ```bash
