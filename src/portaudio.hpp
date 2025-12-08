@@ -90,7 +90,6 @@ class RealPortAudio : public PortAudioInterface {
                               double sampleRate) const override {
         return Pa_IsFormatSupported(inputParameters, outputParameters, sampleRate);
     }
-
 };
 
 inline void startPortAudio(audio::portaudio::PortAudioInterface* pa = nullptr) {
@@ -107,17 +106,17 @@ inline void startPortAudio(audio::portaudio::PortAudioInterface* pa = nullptr) {
     int numDevices = Pa_GetDeviceCount();
     VIAM_SDK_LOG(info) << "Available devices:";
 
-      for (int i = 0; i < numDevices; i++) {
-          const PaDeviceInfo* info = Pa_GetDeviceInfo(i);
-          if (info->maxInputChannels > 0) {
-              VIAM_SDK_LOG(info) << info->name << " default sample rate: " << info->defaultSampleRate
-              << "max input channels: " << info->maxInputChannels;
-          }
-         if (info->maxOutputChannels > 0) {
-              VIAM_SDK_LOG(info) << info->name << " default sample rate: " << info->defaultSampleRate
-              << "max input channels: " << info->maxOutputChannels;
+    for (int i = 0; i < numDevices; i++) {
+        const PaDeviceInfo* info = Pa_GetDeviceInfo(i);
+        if (info->maxInputChannels > 0) {
+            VIAM_SDK_LOG(info) << info->name << " default sample rate: " << info->defaultSampleRate
+                               << "max input channels: " << info->maxInputChannels;
+        }
+        if (info->maxOutputChannels > 0) {
+            VIAM_SDK_LOG(info) << info->name << " default sample rate: " << info->defaultSampleRate
+                               << "max input channels: " << info->maxOutputChannels;
+        }
     }
-      }
 }
 
 }  // namespace portaudio

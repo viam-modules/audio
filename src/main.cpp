@@ -1,14 +1,13 @@
-#include "portaudio.h"
-#include "discovery.hpp"
-#include "microphone.hpp"
 #include <viam/sdk/common/instance.hpp>
 #include <viam/sdk/module/service.hpp>
+#include "discovery.hpp"
+#include "microphone.hpp"
+#include "portaudio.h"
 
 #include <iostream>
 #include <memory>
 
 namespace vsdk = ::viam::sdk;
-
 
 std::vector<std::shared_ptr<vsdk::ModelRegistration>> create_all_model_registrations() {
     std::vector<std::shared_ptr<vsdk::ModelRegistration>> registrations;
@@ -26,10 +25,8 @@ std::vector<std::shared_ptr<vsdk::ModelRegistration>> create_all_model_registrat
             return std::make_unique<discovery::AudioDiscovery>(std::move(deps), std::move(config));
         }));
 
-
     return registrations;
 }
-
 
 int serve(int argc, char** argv) try {
     // Every Viam C++ SDK program must have one and only one Instance object
@@ -59,6 +56,3 @@ int main(int argc, char* argv[]) {
 
     return serve(argc, argv);
 };
-
-
-
