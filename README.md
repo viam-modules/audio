@@ -2,6 +2,15 @@
 
 This [Viam module](https://docs.viam.com/registry/) provides audio input and output capabilities using the [PortAudio](http://www.portaudio.com/) library. It can capture and play audio from microphones and speakers on your machine.
 
+## Audio Format
+
+All audio data uses **little-endian** byte order. The specific format depends on the codec requested:
+
+** supported codecs:**
+- `PCM_16`: 16-bit signed integer PCM (range: -32768 to 32767)
+- `PCM_32`: 32-bit signed integer PCM (range: -2147483648 to 2147483647)
+- `PCM_32_FLOAT`: 32-bit floating point PCM (range: -1.0 to 1.0)
+- `MP3`: MP3 compressed audio
 
 ## Supported Platforms
 - **Darwin ARM64**

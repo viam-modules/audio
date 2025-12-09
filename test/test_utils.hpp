@@ -2,6 +2,7 @@
 
 #include <gmock/gmock.h>
 #include <viam/sdk/common/instance.hpp>
+#include "../src/audio_stream.hpp"
 #include "../src/portaudio.hpp"
 #include "portaudio.h"
 
@@ -96,5 +97,13 @@ protected:
     std::unique_ptr<::testing::NiceMock<test_utils::MockPortAudio>> mock_pa_;
     PaDeviceInfo mock_device_info_;
 };
+
+// Helper function to clear an AudioBuffer - resets all samples and write position
+inline void ClearAudioBuffer(audio::AudioBuffer& buffer) {
+    buffer.total_samples_written.store(0, std::memory_order_relaxed);
+    for (int i = 0; i < buffer.buffer_capacity; i++) {
+        buffer.audio_buffer[i].store(0, std::memory_order_relaxed);
+    }
+}
 
 } // namespace test_utils

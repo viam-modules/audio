@@ -62,6 +62,8 @@ class Speaker final : public viam::sdk::AudioOut, public viam::sdk::Reconfigurab
     int sample_rate_;
     int num_channels_;
     static vsdk::Model model;
+
+    // This is used to ensure there is only one play() call at a time.
     std::mutex playback_mu_;
 
     PaStream* stream_;

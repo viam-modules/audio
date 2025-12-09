@@ -6,6 +6,7 @@
 #include "audio_stream.hpp"
 #include "audio_utils.hpp"
 #include "mp3_encoder.hpp"
+#include "audio_buffer.hpp"
 
 namespace microphone {
 using audio::codec::AudioCodec;

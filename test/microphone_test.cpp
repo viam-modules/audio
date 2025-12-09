@@ -69,7 +69,7 @@ protected:
         ctx->first_sample_adc_time = 0.0;
         ctx->stream_start_time = std::chrono::system_clock::now();
         ctx->first_callback_captured.store(true);
-        ctx->clear();
+        test_utils::ClearAudioBuffer(*ctx);
 
         // Optionally write samples
         for (int i = 0; i < num_samples; i++) {

@@ -16,6 +16,7 @@ function(audio_add_gtest SOURCE_FILE_NAME)
         ${CMAKE_SOURCE_DIR}/src/microphone.cpp
         ${CMAKE_SOURCE_DIR}/src/audio_codec.cpp
         ${CMAKE_SOURCE_DIR}/src/audio_stream.cpp
+        ${CMAKE_SOURCE_DIR}/src/audio_buffer.cpp
         ${CMAKE_SOURCE_DIR}/src/speaker.cpp
         ${CMAKE_SOURCE_DIR}/src/mp3_encoder.cpp
     )
@@ -41,3 +42,4 @@ audio_add_gtest(audio_stream_test.cpp)
 audio_add_gtest(speaker_test.cpp)
 audio_add_gtest(audio_utils_test.cpp)
 audio_add_gtest(mp3_encoder_test.cpp)
+audio_add_gtest(audio_buffer_test.cpp)
