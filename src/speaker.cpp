@@ -55,7 +55,7 @@ vsdk::Model Speaker::model = {"viam", "audio", "speaker"};
  */
 int speakerCallback(const void* inputBuffer,
                     void* outputBuffer,
-                    unsigned long framesPerBuffer,
+                    const unsigned long framesPerBuffer,
                     const PaStreamCallbackTimeInfo* timeInfo,
                     PaStreamCallbackFlags statusFlags,
                     void* userData) {
@@ -63,17 +63,17 @@ int speakerCallback(const void* inputBuffer,
         return paAbort;
     }
 
-    audio::OutputStreamContext* ctx = static_cast<audio::OutputStreamContext*>(userData);
+    audio::OutputStreamContext* const ctx = static_cast<audio::OutputStreamContext*>(userData);
 
-    int16_t* output = static_cast<int16_t*>(outputBuffer);
+    int16_t* const output = static_cast<int16_t*>(outputBuffer);
 
-    uint64_t total_samples = framesPerBuffer * ctx->info.num_channels;
+    const uint64_t total_samples = framesPerBuffer * ctx->info.num_channels;
 
     // Load current playback position from the context
     uint64_t read_pos = ctx->playback_position.load(std::memory_order_relaxed);
 
     // Read samples from our circular buffer and put into portaudio output buffer
-    int samples_read = ctx->read_samples(output, total_samples, read_pos);
+    const int samples_read = ctx->read_samples(output, total_samples, read_pos);
 
     // Store updated playback position
     ctx->playback_position.store(read_pos, std::memory_order_relaxed);
@@ -171,6 +171,10 @@ void Speaker::play(std::vector<uint8_t> const& audio_data,
     std::shared_ptr<audio::OutputStreamContext> playback_context;
     {
         std::lock_guard<std::mutex> lock(stream_mu_);
+        if (!audio_context_) {
+            VIAM_SDK_LOG(error) << "[Play] Audio context is nullptr";
+            throw std::runtime_error("Audio context is nullptr");
+        }
         playback_context = audio_context_;
         start_position = audio_context_->get_write_position();
 

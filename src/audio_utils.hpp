@@ -84,6 +84,7 @@ inline StreamParams setupStreamFromConfig(const ConfigParams& params,
                                           StreamDirection direction,
                                           PaStreamCallback* callback,
                                           const audio::portaudio::PortAudioInterface* pa = nullptr) {
+    // In production pa is nullptr and real_pa is used. For testing, pa is the mock pa
     audio::portaudio::RealPortAudio real_pa;
     const audio::portaudio::PortAudioInterface& audio_interface = pa ? *pa : real_pa;
 
@@ -156,6 +157,7 @@ inline StreamParams setupStreamFromConfig(const ConfigParams& params,
 }
 
 inline void openStream(PaStream*& stream, const StreamParams& params, const audio::portaudio::PortAudioInterface* pa = nullptr) {
+    // In production pa is nullptr and real_pa is used. For testing, pa is the mock pa
     audio::portaudio::RealPortAudio real_pa;
     const audio::portaudio::PortAudioInterface& audio_interface = pa ? *pa : real_pa;
 
@@ -211,6 +213,7 @@ inline void openStream(PaStream*& stream, const StreamParams& params, const audi
 }
 
 inline void startStream(PaStream* stream, const audio::portaudio::PortAudioInterface* pa = nullptr) {
+    // In production pa is nullptr and real_pa is used. For testing, pa is the mock pa
     audio::portaudio::RealPortAudio real_pa;
     const audio::portaudio::PortAudioInterface& audio_interface = pa ? *pa : real_pa;
 
@@ -222,6 +225,7 @@ inline void startStream(PaStream* stream, const audio::portaudio::PortAudioInter
 }
 
 inline void shutdown_stream(PaStream* stream, const audio::portaudio::PortAudioInterface* pa = nullptr) {
+    // In production pa is nullptr and real_pa is used. For testing, pa is the mock pa
     audio::portaudio::RealPortAudio real_pa;
     const audio::portaudio::PortAudioInterface& audio_interface = pa ? *pa : real_pa;
 
@@ -243,6 +247,7 @@ inline void shutdown_stream(PaStream* stream, const audio::portaudio::PortAudioI
 }
 
 inline void restart_stream(PaStream*& stream, const StreamParams& params, const audio::portaudio::PortAudioInterface* pa = nullptr) {
+    // In production pa is nullptr and real_pa is used. For testing, pa is the mock pa
     audio::portaudio::RealPortAudio real_pa;
     const audio::portaudio::PortAudioInterface& audio_interface = pa ? *pa : real_pa;
 

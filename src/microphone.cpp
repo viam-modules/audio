@@ -12,7 +12,6 @@ namespace microphone {
 using audio::codec::AudioCodec;
 
 // === Static Helper Functions ===
-// === Static Helper Functions ===
 
 // Calculate chunk size aligned to MP3 frame boundaries
 // Returns the number of samples (including all channels) for an optimal chunk size
