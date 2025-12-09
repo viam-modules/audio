@@ -18,10 +18,10 @@ void resample_audio(int input_sample_rate,
     soxr_error_t err = soxr_oneshot(input_sample_rate,   // input rate
                                     output_sample_rate,  // output rate
                                     num_channels,
-                                    reinterpret_cast<int16_t*>(output_data.data()),
+                                    reinterpret_cast<const int16_t*>(input_data.data()),
                                     input_samples,
                                     NULL,
-                                    output_data.data(),
+                                    reinterpret_cast<int16_t*>(output_data.data()),
                                     output_samples,
                                     &output_done,
                                     NULL,
