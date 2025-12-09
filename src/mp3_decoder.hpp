@@ -17,7 +17,7 @@ struct MP3DecoderContext {
     int num_channels = 0;
 
     MP3DecoderContext();
-    
+
     ~MP3DecoderContext();
 
 };
