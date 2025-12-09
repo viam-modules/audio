@@ -161,9 +161,6 @@ inline void openStream(PaStream*& stream, const StreamParams& params, const audi
     audio::portaudio::RealPortAudio real_pa;
     const audio::portaudio::PortAudioInterface& audio_interface = pa ? *pa : real_pa;
 
-    VIAM_SDK_LOG(debug) << "Opening stream for device '" << params.device_name << "' (index " << params.device_index << ")"
-                        << " with sample rate: " << params.sample_rate << ", channels: " << params.num_channels;
-
     // Setup stream parameters
     PaStreamParameters stream_params;
     stream_params.device = params.device_index;
@@ -191,7 +188,7 @@ inline void openStream(PaStream*& stream, const StreamParams& params, const audi
     }
 
     VIAM_SDK_LOG(info) << "Opening stream for device '" << params.device_name << "' (index " << params.device_index << ")"
-                       << " with sample rate " << params.sample_rate << " and latency " << stream_params.suggestedLatency << " seconds";
+                       << " with sample rate " << params.sample_rate << " channels: " << params.num_channels; " and latency " << stream_params.suggestedLatency << " seconds";
 
     err = audio_interface.openStream(&stream,
                                      inputParams,
