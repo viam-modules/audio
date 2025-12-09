@@ -39,9 +39,10 @@ fi
 conan profile detect || echo "Conan is already installed"
 
 # Check if viam-cpp-sdk is already built (e.g., in Docker image)
-# The ":*" checks for actual built binaries, not just the recipe
-if conan list "viam-cpp-sdk/0.21.0:*" 2>/dev/null | grep -q "viam-cpp-sdk/0.21.0"; then
-  echo "viam-cpp-sdk already built (using pre-built from Docker image)"
+# Look for package ID hashes which indicate built binaries
+SDK_BINARIES=$(conan list "viam-cpp-sdk/0.21.0:*" 2>/dev/null | grep -c "^[[:space:]]*[a-f0-9]\{40\}" || true)
+if [ "$SDK_BINARIES" -gt 0 ]; then
+  echo "viam-cpp-sdk already built"
 else
   echo "Building viam-cpp-sdk from source..."
 
