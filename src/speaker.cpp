@@ -6,9 +6,9 @@
 #include <viam/sdk/components/audio_out.hpp>
 #include <viam/sdk/registry/registry.hpp>
 #include "audio_buffer.hpp"
-#include "audio_codec.hpp"
 #include "audio_utils.hpp"
 #include "mp3_decoder.hpp"
+#include "audio_codec.hpp"
 #include "resample.hpp"
 
 namespace speaker {
@@ -191,6 +191,7 @@ void Speaker::play(std::vector<uint8_t> const& audio_data,
             // Shouldn't ever get here because it will throw when converting the str to enum,
             // but for safety
             VIAM_SDK_LOG(error) << "Unsupported codec for playback: " << codec_str;
+            VIAM_SDK_LOG(error) << "Unsupported codec for playback: " << codec_str;
             throw std::invalid_argument("Unsupported codec for playback");
     }
 
@@ -214,6 +215,18 @@ void Speaker::play(std::vector<uint8_t> const& audio_data,
 
     const int16_t* samples = reinterpret_cast<const int16_t*>(decoded_data.data());
     size_t num_samples = decoded_data.size() / sizeof(int16_t);
+
+    // Check if audio duration exceeds playback buffer capacity
+    {
+        std::lock_guard<std::mutex> lock(stream_mu_);
+        double duration_seconds = static_cast<double>(num_samples) / (audio_sample_rate * audio_num_channels);
+        if (duration_seconds > audio::BUFFER_DURATION_SECONDS) {
+            VIAM_SDK_LOG(error) << "Audio duration (" << duration_seconds << " seconds) exceeds maximum playback buffer size ("
+                                << audio::BUFFER_DURATION_SECONDS << " seconds)";
+            throw std::invalid_argument("Audio file too long for playback buffer (max " + std::to_string(audio::BUFFER_DURATION_SECONDS) +
+                                        " seconds)");
+        }
+    }
 
     VIAM_SDK_LOG(debug) << "Playing " << num_samples << " samples (" << decoded_data.size() << " bytes)";
 

@@ -23,7 +23,6 @@ AudioCodec parse_codec(const std::string& codec_str) {
     } else if (codec == vsdk::audio_codecs::PCM_32_FLOAT) {
         return AudioCodec::PCM_32_FLOAT;
     } else if (codec == vsdk::audio_codecs::MP3) {
-        VIAM_SDK_LOG(info) << "is mp3";
         return AudioCodec::MP3;
     } else if (codec == vsdk::audio_codecs::PCM_16) {
         return AudioCodec::PCM_16;
