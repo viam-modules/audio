@@ -101,6 +101,7 @@ Microphone::Microphone(viam::sdk::Dependencies deps, viam::sdk::ResourceConfig c
 }
 
 Microphone::~Microphone() {
+    VIAM_SDK_LOG(debug) << "[Microphone::~Microphone] Destructor called";
     if (stream_) {
         PaError err = Pa_StopStream(stream_);
         if (err != paNoError) {
@@ -204,6 +205,11 @@ void Microphone::reconfigure(const viam::sdk::Dependencies& deps, const viam::sd
         // Set new configuration and restart stream under lock
         {
             std::lock_guard<std::mutex> lock(stream_ctx_mu_);
+
+            // Stop the stream first before replacing audio_context_
+            // Otherwise the callback thread may still be accessing the old context
+            // after we destroy it (heap-use-after-free)
+            audio::utils::restart_stream(stream_, setup.stream_params, pa_);
             device_name_ = setup.stream_params.device_name;
             device_index_ = setup.stream_params.device_index;
             sample_rate_ = setup.stream_params.sample_rate;
@@ -211,8 +217,6 @@ void Microphone::reconfigure(const viam::sdk::Dependencies& deps, const viam::sd
             latency_ = setup.stream_params.latency_seconds;
             audio_context_ = setup.audio_context;
             historical_throttle_ms_ = setup.config_params.historical_throttle_ms.value_or(DEFAULT_HISTORICAL_THROTTLE_MS);
-
-            audio::utils::restart_stream(stream_, setup.stream_params, pa_);
         }
         VIAM_SDK_LOG(info) << "[reconfigure] Reconfigure completed successfully";
     } catch (const std::exception& e) {
@@ -412,13 +416,11 @@ void Microphone::get_audio(std::string const& codec,
 
         // Check if we're reading historical data (far behind write position)
         if (previous_timestamp != 0) {
-            VIAM_SDK_LOG(info) << "here!" << stream_historical_throttle_ms;
             uint64_t current_write_pos = stream_context->get_write_position();
             uint64_t distance_behind = current_write_pos - read_position;
             // If we're more than 1 second behind, we're reading historical data
             uint64_t one_second_samples = stream_sample_rate * stream_num_channels;
             if (distance_behind > one_second_samples) {
-                VIAM_SDK_LOG(info) << "sleeping" << stream_historical_throttle_ms;
                 // Throttle historical data to give clients time to process
                 std::this_thread::sleep_for(std::chrono::milliseconds(stream_historical_throttle_ms));
             }
