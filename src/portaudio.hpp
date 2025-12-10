@@ -116,7 +116,7 @@ inline void startPortAudio(const audio::portaudio::PortAudioInterface* pa = null
         }
         if (info->maxInputChannels > 0) {
             VIAM_SDK_LOG(info) << info->name << " default sample rate: " << info->defaultSampleRate
-                               << "max input channels: " << info->maxInputChannels;
+                               << " max input channels: " << info->maxInputChannels;
         }
     }
 
@@ -130,7 +130,7 @@ inline void startPortAudio(const audio::portaudio::PortAudioInterface* pa = null
         }
         if (info->maxOutputChannels > 0) {
             VIAM_SDK_LOG(info) << info->name << " default sample rate: " << info->defaultSampleRate
-                               << "max input channels: " << info->maxOutputChannels;
+                               << " max input channels: " << info->maxOutputChannels;
         }
     }
 }
