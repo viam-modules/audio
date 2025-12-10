@@ -416,13 +416,11 @@ void Microphone::get_audio(std::string const& codec,
 
         // Check if we're reading historical data (far behind write position)
         if (previous_timestamp != 0) {
-            VIAM_SDK_LOG(info) << "here!" << stream_historical_throttle_ms;
             uint64_t current_write_pos = stream_context->get_write_position();
             uint64_t distance_behind = current_write_pos - read_position;
             // If we're more than 1 second behind, we're reading historical data
             uint64_t one_second_samples = stream_sample_rate * stream_num_channels;
             if (distance_behind > one_second_samples) {
-                VIAM_SDK_LOG(info) << "sleeping" << stream_historical_throttle_ms;
                 // Throttle historical data to give clients time to process
                 std::this_thread::sleep_for(std::chrono::milliseconds(stream_historical_throttle_ms));
             }
