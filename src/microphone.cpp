@@ -83,7 +83,6 @@ class StreamGuard {
 
 Microphone::Microphone(viam::sdk::Dependencies deps, viam::sdk::ResourceConfig cfg, audio::portaudio::PortAudioInterface* pa)
     : viam::sdk::AudioIn(cfg.name()), stream_(nullptr), pa_(pa), active_streams_(0) {
-    VIAM_SDK_LOG(info) << "[Microphone::Microphone] Constructor called for " << cfg.name();
     auto setup = audio::utils::setup_audio_device<audio::InputStreamContext>(cfg, audio::utils::StreamDirection::Input, AudioCallback, pa_);
 
     // Set new configuration and start stream under lock
@@ -102,7 +101,7 @@ Microphone::Microphone(viam::sdk::Dependencies deps, viam::sdk::ResourceConfig c
 }
 
 Microphone::~Microphone() {
-    VIAM_SDK_LOG(info) << "[Microphone::~Microphone] Destructor called";
+    VIAM_SDK_LOG(debug) << "[Microphone::~Microphone] Destructor called";
     if (stream_) {
         PaError err = Pa_StopStream(stream_);
         if (err != paNoError) {
@@ -206,6 +205,11 @@ void Microphone::reconfigure(const viam::sdk::Dependencies& deps, const viam::sd
         // Set new configuration and restart stream under lock
         {
             std::lock_guard<std::mutex> lock(stream_ctx_mu_);
+
+            // Stop the stream first before replacing audio_context_
+            // Otherwise the callback thread may still be accessing the old context
+            // after we destroy it (heap-use-after-free)
+            audio::utils::restart_stream(stream_, setup.stream_params, pa_);
             device_name_ = setup.stream_params.device_name;
             device_index_ = setup.stream_params.device_index;
             sample_rate_ = setup.stream_params.sample_rate;
@@ -213,8 +217,6 @@ void Microphone::reconfigure(const viam::sdk::Dependencies& deps, const viam::sd
             latency_ = setup.stream_params.latency_seconds;
             audio_context_ = setup.audio_context;
             historical_throttle_ms_ = setup.config_params.historical_throttle_ms.value_or(DEFAULT_HISTORICAL_THROTTLE_MS);
-
-            audio::utils::restart_stream(stream_, setup.stream_params, pa_);
         }
         VIAM_SDK_LOG(info) << "[reconfigure] Reconfigure completed successfully";
     } catch (const std::exception& e) {
