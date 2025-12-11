@@ -86,7 +86,7 @@ void convert_pcm32_to_pcm16(const uint8_t* input_data, const int byte_count, std
         int32_t sample32;
         memcpy(&sample32, input_data + i * 4, 4);
 
-        int16_t sample16 = sample32 >> 16;
+        const int16_t sample16 = sample32 >> 16;
         memcpy(output.data() + i * 2, &sample16, 2);
     }
 }
@@ -103,8 +103,8 @@ void convert_float32_to_pcm16(const uint8_t* input_data, const int byte_count, s
         float f;
         memcpy(&f, input_data + i * 4, 4);
 
-        float clamped = std::max(-1.0f, std::min(1.0f, f));
-        int16_t s = static_cast<int16_t>(clamped * FLOAT_TO_INT16_SCALE);
+        const float clamped = std::max(-1.0f, std::min(1.0f, f));
+        const int16_t s = static_cast<int16_t>(clamped * FLOAT_TO_INT16_SCALE);
 
         memcpy(output.data() + i * 2, &s, 2);
     }
