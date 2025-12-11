@@ -5,7 +5,6 @@
 
 namespace speaker {
 
-
 MP3DecoderContext::MP3DecoderContext() : sample_rate(0), num_channels(0) {
     CleanupPtr<hip_decode_exit> hip(hip_decode_init());
     if (!hip) {
@@ -76,7 +75,6 @@ void decode_mp3_to_pcm16(MP3DecoderContext& ctx, const std::vector<uint8_t>& enc
         VIAM_SDK_LOG(debug) << "decode_mp3_to_pcm16: no data to decode";
         return;
     }
-
 
     VIAM_SDK_LOG(debug) << "Decoding " << (encoded_data.size()) << " bytes of MP3 data";
 
