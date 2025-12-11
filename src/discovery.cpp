@@ -6,6 +6,7 @@
 #include <viam/sdk/services/discovery.hpp>
 #include "microphone.hpp"
 #include "portaudio.hpp"
+#include "speaker.hpp"
 
 namespace discovery {
 
@@ -98,9 +99,14 @@ std::vector<vsdk::ResourceConfig> AudioDiscovery::discover_resources(const vsdk:
                               info->maxInputChannels,
                               count_input);
         } else if (info->maxOutputChannels > 0) {
-            // //TODO: change firm param to speaker model when speaker is in main
-            // add_device_config("Speaker", "audio_out", "speaker", "rdk:component:audio_out",
-            //                 device_name, sample_rate, info->maxOutputChannels, count_output);
+            add_device_config(speaker::Speaker::model,
+                              "audio_out",
+                              "speaker",
+                              "rdk:component:audio_out",
+                              device_name,
+                              sample_rate,
+                              info->maxOutputChannels,
+                              count_output);
         }
     }
 

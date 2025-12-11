@@ -3,6 +3,8 @@
 #include "discovery.hpp"
 #include "microphone.hpp"
 #include "portaudio.h"
+#include "portaudio.hpp"
+#include "speaker.hpp"
 
 #include <iostream>
 #include <memory>
@@ -19,6 +21,14 @@ std::vector<std::shared_ptr<vsdk::ModelRegistration>> create_all_model_registrat
             return std::make_unique<microphone::Microphone>(std::move(deps), std::move(config));
         },
         microphone::Microphone::validate));
+
+    registrations.push_back(std::make_shared<vsdk::ModelRegistration>(
+        vsdk::API::get<vsdk::AudioOut>(),
+        speaker::Speaker::model,
+        [](vsdk::Dependencies deps, vsdk::ResourceConfig config) {
+            return std::make_unique<speaker::Speaker>(std::move(deps), std::move(config));
+        },
+        speaker::Speaker::validate));
 
     registrations.push_back(std::make_shared<vsdk::ModelRegistration>(
         vsdk::API::get<vsdk::Discovery>(), discovery::AudioDiscovery::model, [](vsdk::Dependencies deps, vsdk::ResourceConfig config) {

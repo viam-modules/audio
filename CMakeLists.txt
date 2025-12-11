@@ -12,6 +12,9 @@ add_executable(audio-module
     src/main.cpp
     src/microphone.cpp
     src/audio_stream.cpp
+    src/audio_buffer.cpp
+    src/audio_codec.cpp
+    src/speaker.cpp
     src/discovery.cpp
     src/mp3_encoder.cpp
 )
@@ -76,6 +79,9 @@ target_include_directories(audio-module
     PRIVATE ${PORTAUDIO_INCLUDE_DIRS}
 )
 target_compile_options(audio-module PRIVATE ${PORTAUDIO_CFLAGS_OTHER})
+
+install(TARGETS audio-module DESTINATION .)
+install(FILES meta.json DESTINATION .)
 
 enable_testing()
 add_subdirectory(test)

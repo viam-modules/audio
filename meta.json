@@ -11,12 +11,24 @@
       "model": "viam:audio:microphone",
       "short_description": "captures audio from system microphones"
     },
+    {
+      api": "rdk:component:audioout",
+      "markdown_link": "README.md#model-viamaudiospeaker",
+      "model": "viam:audio:speaker",
+      "short_description": "outputs audio to a system speaker"
+    },
      {
       "api": "rdk:service:discovery",
       "markdown_link": "README.md#model-viamaudiodiscovery",
       "model": "viam:audio:discovery",
       "short_description": "discovers microphones and speakers on the system"
-    }
+    },
   ],
+   "build": {
+       "setup": "make setup",
+       "build": "make module.tar.gz",
+       "path" : "module.tar.gz",
+       "arch" : ["linux/amd64", "linux/arm64", "darwin/arm64"]
+    },
   "entrypoint": "audio-module"
 }

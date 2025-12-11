@@ -147,11 +147,10 @@ TEST_F(DiscoveryTest, MixedInputOutputDevices) {
     AudioDiscovery discovery(deps_, *config_, mock_pa_.get());
     auto configs = discovery.discover_resources(ProtoStruct{});
 
-    // Only input devices should be discovered
     EXPECT_EQ(configs.size(), 3);
-    EXPECT_EQ(configs[0].name(), test_mic_name);
-    EXPECT_EQ(configs[1].name(), test_mic_name2);
-    EXPECT_EQ(configs[2].name(), test_speaker);
+    EXPECT_EQ(configs[0].name(), "microphone-1");
+    EXPECT_EQ(configs[1].name(), "speaker-1");
+    EXPECT_EQ(configs[2].name(), "microphone-2");
 }
 
 int main(int argc, char** argv) {
