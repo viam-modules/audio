@@ -157,13 +157,13 @@ void Speaker::play(std::vector<uint8_t> const& audio_data,
     }
 
     if (codec != AudioCodec::MP3) {
-    }
-    if (info->num_channels != num_channels_) {
-        VIAM_SDK_LOG(error) << "Channel count mismatch: speaker is configured for " << num_channels_ << " channels but audio has "
-                            << info->num_channels << " channels";
-        throw std::invalid_argument("Channel count mismatch: speaker has " + std::to_string(num_channels_) + " channels but audio has " +
-                                    std::to_string(info->num_channels) + " channels");
-    }
+        if (info->num_channels != num_channels_) {
+            VIAM_SDK_LOG(error) << "Channel count mismatch: speaker is configured for " << num_channels_ << " channels but audio has "
+                                << info->num_channels << " channels";
+            throw std::invalid_argument("Channel count mismatch: speaker has " + std::to_string(num_channels_) + " channels but audio has " +
+                                        std::to_string(info->num_channels) + " channels");
+        }
+}
 
     std::vector<uint8_t> decoded_data;
 
