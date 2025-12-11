@@ -104,10 +104,33 @@ std::vector<std::string> Speaker::validate(vsdk::ResourceConfig cfg) {
             VIAM_SDK_LOG(error) << "[validate] latency attribute must be a number";
             throw std::invalid_argument("latency attribute must be a number");
         }
-        double latency_ms = *attrs.at("latency").get<double>();
+        const double latency_ms = *attrs.at("latency").get<double>();
         if (latency_ms < 0) {
             VIAM_SDK_LOG(error) << "[validate] latency must be non-negative";
             throw std::invalid_argument("latency must be non-negative");
+        }
+    }
+
+    if (attrs.count("sample_rate")) {
+        if (!attrs["sample_rate"].is_a<double>()) {
+            VIAM_SDK_LOG(error) << "[validate] sample_rate attribute must be a number";
+            throw std::invalid_argument("sample_rate attribute must be a number");
+        }
+        double sample_rate = *attrs.at("sample_rate").get<double>();
+        if (sample_rate <= 0) {
+            VIAM_SDK_LOG(error) << "[validate] sample rate must be greater than zero";
+            throw std::invalid_argument("sample rate must be greater than zero");
+        }
+    }
+    if (attrs.count("num_channels")) {
+        if (!attrs["num_channels"].is_a<double>()) {
+            VIAM_SDK_LOG(error) << "[validate] num_channels attribute must be a number";
+            throw std::invalid_argument("num_channels attribute must be a number");
+        }
+        double num_channels = *attrs.at("num_channels").get<double>();
+        if (num_channels <= 0) {
+            VIAM_SDK_LOG(error) << "[validate] num_channels must be greater than zero";
+            throw std::invalid_argument(" num_channels must be greater than zero");
         }
     }
 
@@ -312,13 +335,16 @@ void Speaker::reconfigure(const vsdk::Dependencies& deps, const vsdk::ResourceCo
         // Set new configuration and restart stream under lock
         {
             std::lock_guard<std::mutex> lock(stream_mu_);
+
+            // Stop the stream first efore replacing audio_context_
+            // Otherwise the callback thread may still be accessing the old context
+            // after we destroy it (heap-use-after-free)
+            audio::utils::restart_stream(stream_, setup.stream_params, pa_);
             device_name_ = setup.stream_params.device_name;
             sample_rate_ = setup.stream_params.sample_rate;
             num_channels_ = setup.stream_params.num_channels;
             latency_ = setup.stream_params.latency_seconds;
             audio_context_ = setup.audio_context;
-
-            audio::utils::restart_stream(stream_, setup.stream_params, pa_);
         }
         VIAM_SDK_LOG(info) << "[reconfigure] Reconfigure completed successfully";
     } catch (const std::exception& e) {

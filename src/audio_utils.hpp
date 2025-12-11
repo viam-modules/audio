@@ -50,7 +50,7 @@ struct StreamParams {
 
 // Helper function to find device by name
 inline PaDeviceIndex findDeviceByName(const std::string& name, const audio::portaudio::PortAudioInterface& pa) {
-    int deviceCount = pa.getDeviceCount();
+    const int deviceCount = pa.getDeviceCount();
     if (deviceCount < 0) {
         return paNoDevice;
     }
@@ -70,7 +70,7 @@ inline PaDeviceIndex findDeviceByName(const std::string& name, const audio::port
 }
 
 inline ConfigParams parseConfigAttributes(const viam::sdk::ResourceConfig& cfg) {
-    auto attrs = cfg.attributes();
+    const auto attrs = cfg.attributes();
     ConfigParams params;
 
     if (attrs.count("device_name")) {
@@ -93,6 +93,8 @@ inline ConfigParams parseConfigAttributes(const viam::sdk::ResourceConfig& cfg) 
         params.historical_throttle_ms = *attrs.at("historical_throttle_ms").get<double>();
     }
 
+    VIAM_SDK_LOG(debug) << "[parseConfigAttributes] sucessfully parsed config attributes";
+
     return params;
 }
 
@@ -105,7 +107,7 @@ inline StreamParams setupStreamFromConfig(const ConfigParams& params,
     audio::portaudio::RealPortAudio real_pa;
     const audio::portaudio::PortAudioInterface& audio_interface = pa ? *pa : real_pa;
 
-    std::string device_name = params.device_name;
+    const std::string& device_name = params.device_name;
     PaDeviceIndex device_index = paNoDevice;
     const PaDeviceInfo* deviceInfo = nullptr;
 
@@ -130,6 +132,7 @@ inline StreamParams setupStreamFromConfig(const ConfigParams& params,
             VIAM_SDK_LOG(error) << "[setupStreamFromConfig] Failed to get the name of the default device";
             throw std::runtime_error("failed to get the name of the default device");
         }
+        VIAM_SDK_LOG(debug) << "[setupStreamFromConfig] Found default device named " << deviceInfo->name;
     } else {
         device_index = findDeviceByName(device_name, audio_interface);
         if (device_index == paNoDevice) {
@@ -150,14 +153,19 @@ inline StreamParams setupStreamFromConfig(const ConfigParams& params,
     stream_params.sample_rate = params.sample_rate.value_or(static_cast<int>(deviceInfo->defaultSampleRate));
     stream_params.num_channels = params.num_channels.value_or(1);
 
+    VIAM_SDK_LOG(debug) << "[setupStreamFromConfig] Using sample rate " << stream_params.sample_rate
+                        << " and num channels: " << stream_params.num_channels;
+
     // Use appropriate default latency based on direction
-    double default_latency =
+    const double default_latency =
         (direction == StreamDirection::Input) ? deviceInfo->defaultLowInputLatency : deviceInfo->defaultLowOutputLatency;
 
     stream_params.latency_seconds = params.latency_ms.has_value() ? params.latency_ms.value() / 1000.0 : default_latency;
 
+    VIAM_SDK_LOG(debug) << "[setupStreamFromConfig] Using latency " << stream_params.latency_seconds;
+
     // Validate num_channels against device's max channels
-    int max_channels = (direction == StreamDirection::Input) ? deviceInfo->maxInputChannels : deviceInfo->maxOutputChannels;
+    const int max_channels = (direction == StreamDirection::Input) ? deviceInfo->maxInputChannels : deviceInfo->maxOutputChannels;
 
     if (stream_params.num_channels > max_channels) {
         VIAM_SDK_LOG(error) << "Requested " << stream_params.num_channels << " channels but device '" << deviceInfo->name
