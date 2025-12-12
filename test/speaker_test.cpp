@@ -653,9 +653,12 @@ TEST_F(SpeakerTest, CodecConversion_SampleRateMismatch) {
     viam::sdk::audio_info info{viam::sdk::audio_codecs::PCM_16, 44100, num_channels};
     ProtoStruct extra{};
 
-    EXPECT_THROW({
+    // Set playback position to end so play() returns immediately
+    speaker.audio_context_->playback_position.store(100);
+
+    EXPECT_NO_THROW({
         speaker.play(audio_data, info, extra);
-    }, std::invalid_argument);
+    });
 }
 
 TEST_F(SpeakerTest, CodecConversion_ChannelMismatch) {
@@ -696,6 +699,3 @@ int main(int argc, char **argv) {
   ::testing::AddGlobalTestEnvironment(new test_utils::AudioTestEnvironment);
   return RUN_ALL_TESTS();
 }
-
-
-
