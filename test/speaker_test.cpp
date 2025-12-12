@@ -694,6 +694,74 @@ TEST_F(SpeakerTest, CodecConversion_ChannelMismatch) {
     }, std::invalid_argument);
 }
 
+
+ TEST_F(SpeakerTest, Play_ResamplesSampleRateMismatch) {
+      // Speaker configured for 48000 Hz
+      int speaker_sample_rate = 48000;
+      int num_channels = 2;
+
+      auto attributes = ProtoStruct{};
+      attributes["sample_rate"] = static_cast<double>(speaker_sample_rate);
+      attributes["num_channels"] = static_cast<double>(num_channels);
+
+      ResourceConfig config(
+          "rdk:component:audioout",
+          "",
+          test_name_,
+          attributes,
+          "",
+          Model("viam", "audio", "speaker"),
+          LinkConfig{},
+          log_level::info
+      );
+
+      Dependencies deps{};
+      speaker::Speaker speaker(deps, config, mock_pa_.get());
+
+      // Create audio at 44100 Hz (different from speaker's 48000 Hz)
+      int audio_sample_rate = 44100;
+      int duration_ms = 100;
+      int num_samples = (audio_sample_rate * duration_ms / 1000) * num_channels;
+
+      std::vector<int16_t> test_samples(num_samples);
+      for (int i = 0; i < num_samples; i++) {
+          test_samples[i] = static_cast<int16_t>(i % 1000);
+      }
+
+      std::vector<uint8_t> audio_data(num_samples * sizeof(int16_t));
+      std::memcpy(audio_data.data(), test_samples.data(), audio_data.size());
+
+      viam::sdk::audio_info info{viam::sdk::audio_codecs::PCM_16, audio_sample_rate, num_channels};
+      ProtoStruct extra{};
+
+      // Calculate expected number of samples after resampling
+      // resampled_samples = original_samples * (speaker_rate / audio_rate)
+      int expected_resampled_samples = (num_samples * speaker_sample_rate) / audio_sample_rate;
+
+      // Set playback position so play() returns immediately after writing
+      speaker.audio_context_->playback_position.store(expected_resampled_samples);
+
+      EXPECT_NO_THROW({
+          speaker.play(audio_data, info, extra);
+      });
+
+      // Verify that resampled audio was written to buffer
+      // The buffer should have approximately the expected number of resampled samples
+      uint64_t write_pos = speaker.audio_context_->get_write_position();
+
+      EXPECT_EQ(write_pos, expected_resampled_samples);
+
+      // Verify we can read back resampled data
+      std::vector<int16_t> read_buffer(expected_resampled_samples);
+      uint64_t read_pos = 0;
+      int samples_read = speaker.audio_context_->read_samples(
+          read_buffer.data(), expected_resampled_samples, read_pos);
+
+      EXPECT_GT(samples_read, 0);
+      EXPECT_EQ(samples_read, expected_resampled_samples);
+  }
+
+
 int main(int argc, char **argv) {
   ::testing::InitGoogleTest(&argc, argv);
   ::testing::AddGlobalTestEnvironment(new test_utils::AudioTestEnvironment);

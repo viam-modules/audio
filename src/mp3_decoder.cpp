@@ -5,23 +5,6 @@
 
 namespace speaker {
 
-// Helper to skip ID3v2 tags at the beginning of MP3 data
-static size_t skip_id3v2_tag(const std::vector<uint8_t>& data) {
-    // Check for ID3v2 tag (starts with "ID3")
-    if (data.size() < 10 || data[0] != 'I' || data[1] != 'D' || data[2] != '3') {
-        return 0;  // No ID3 tag
-    }
-
-    // ID3v2 size is stored in bytes 6-9 as a synchsafe integer (28 bits)
-    // Each byte uses only 7 bits, MSB is always 0
-    size_t tag_size = ((data[6] & 0x7F) << 21) | ((data[7] & 0x7F) << 14) | ((data[8] & 0x7F) << 7) | (data[9] & 0x7F);
-
-    // Total size is tag_size + 10 byte header
-    size_t total_size = tag_size + 10;
-
-    VIAM_SDK_LOG(debug) << "Skipping ID3v2 tag: " << total_size << " bytes";
-    return total_size;
-}
 
 MP3DecoderContext::MP3DecoderContext() : sample_rate(0), num_channels(0) {
     CleanupPtr<hip_decode_exit> hip(hip_decode_init());
@@ -95,12 +78,12 @@ void decode_mp3_to_pcm16(MP3DecoderContext& ctx, const std::vector<uint8_t>& enc
     }
 
 
-    VIAM_SDK_LOG(debug) << "Decoding " << encoded_data.size() << " bytes of MP3 data";
+     VIAM_SDK_LOG(debug) << "Decoding " << (encoded_data.size()) << " bytes of MP3 data";
 
     // Buffers for decoded PCM samples - one MP3 frame is max 1152 samples
-    const size_t FRAME_BUFFER_SIZE = 1152;  // Samples per channel
-    std::vector<int16_t> pcm_left(FRAME_BUFFER_SIZE);
-    std::vector<int16_t> pcm_right(FRAME_BUFFER_SIZE);
+    const size_t frame_buffer_size = 1152;  // Samples per channel
+    std::vector<int16_t> pcm_left(frame_buffer_size);
+    std::vector<int16_t> pcm_right(frame_buffer_size);
 
     mp3data_struct mp3data;
     memset(&mp3data, 0, sizeof(mp3data));
