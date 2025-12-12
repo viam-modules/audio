@@ -110,7 +110,7 @@ std::vector<std::string> Speaker::validate(vsdk::ResourceConfig cfg) {
             throw std::invalid_argument("latency must be non-negative");
         }
     }
-       if (attrs.count("sample_rate")) {
+    if (attrs.count("sample_rate")) {
         if (!attrs["sample_rate"].is_a<double>()) {
             VIAM_SDK_LOG(error) << "[validate] sample_rate attribute must be a number";
             throw std::invalid_argument("sample_rate attribute must be a number");
