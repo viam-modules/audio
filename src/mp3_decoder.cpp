@@ -5,6 +5,7 @@
 
 namespace speaker {
 
+<<<<<<< HEAD
 // Helper to skip ID3v2 tags at the beginning of MP3 data
 static size_t skip_id3v2_tag(const std::vector<uint8_t>& data) {
     // Check for ID3v2 tag (starts with "ID3")
@@ -23,6 +24,8 @@ static size_t skip_id3v2_tag(const std::vector<uint8_t>& data) {
     return total_size;
 }
 
+=======
+>>>>>>> main
 MP3DecoderContext::MP3DecoderContext() : sample_rate(0), num_channels(0) {
     CleanupPtr<hip_decode_exit> hip(hip_decode_init());
     if (!hip) {
@@ -94,6 +97,7 @@ void decode_mp3_to_pcm16(MP3DecoderContext& ctx, const std::vector<uint8_t>& enc
         return;
     }
 
+<<<<<<< HEAD
     // Skip ID3 tag if present
     size_t offset = skip_id3v2_tag(encoded_data);
     if (offset >= encoded_data.size()) {
@@ -107,19 +111,36 @@ void decode_mp3_to_pcm16(MP3DecoderContext& ctx, const std::vector<uint8_t>& enc
     const size_t FRAME_BUFFER_SIZE = 1152;  // Samples per channel
     std::vector<int16_t> pcm_left(FRAME_BUFFER_SIZE);
     std::vector<int16_t> pcm_right(FRAME_BUFFER_SIZE);
+=======
+    VIAM_SDK_LOG(debug) << "Decoding " << (encoded_data.size()) << " bytes of MP3 data";
+
+    // Buffers for decoded PCM samples - one MP3 frame is max 1152 samples
+    const size_t frame_buffer_size = 1152;  // Samples per channel
+    std::vector<int16_t> pcm_left(frame_buffer_size);
+    std::vector<int16_t> pcm_right(frame_buffer_size);
+>>>>>>> main
 
     mp3data_struct mp3data;
     memset(&mp3data, 0, sizeof(mp3data));
 
     std::vector<uint8_t> mutable_data(encoded_data.begin(), encoded_data.end());
+<<<<<<< HEAD
     unsigned char* encoded_data_ptr = mutable_data.data() + offset;
     size_t mp3_data_length = mutable_data.size() - offset;
+=======
+    unsigned char* encoded_data_ptr = mutable_data.data();
+    const size_t mp3_data_length = mutable_data.size();
+>>>>>>> main
     int frames_decoded = 0;
 
     // Decode frame by frame using hip_decode1_headers (returns at most one frame per call)
     // Keep calling with the same data - the decoder maintains internal state
     while (true) {
+<<<<<<< HEAD
         int decoded_samples =
+=======
+        const int decoded_samples =
+>>>>>>> main
             hip_decode1_headers(ctx.decoder.get(), encoded_data_ptr, mp3_data_length, pcm_left.data(), pcm_right.data(), &mp3data);
 
         if (decoded_samples < 0) {
@@ -153,7 +174,11 @@ void decode_mp3_to_pcm16(MP3DecoderContext& ctx, const std::vector<uint8_t>& enc
     // Flush decoder - repeatedly call with nullptr until no more samples
     int flush_count = 0;
     while (true) {
+<<<<<<< HEAD
         int decoded_samples = hip_decode1_headers(ctx.decoder.get(), nullptr, 0, pcm_left.data(), pcm_right.data(), &mp3data);
+=======
+        const int decoded_samples = hip_decode1_headers(ctx.decoder.get(), nullptr, 0, pcm_left.data(), pcm_right.data(), &mp3data);
+>>>>>>> main
 
         if (decoded_samples < 0) {
             VIAM_SDK_LOG(error) << "[decode_mp3_to_pcm16]: MP3 decoder failed to flush";

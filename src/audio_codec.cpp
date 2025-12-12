@@ -9,6 +9,8 @@
 namespace audio {
 namespace codec {
 
+constexpr float FLOAT_TO_INT16_SCALE = 32767.0f;
+
 namespace vsdk = ::viam::sdk;
 
 std::string toLower(std::string s) {
@@ -72,12 +74,17 @@ void copy_pcm16(const int16_t* samples, int sample_count, std::vector<uint8_t>& 
     std::memcpy(output.data(), samples, sample_count * sizeof(int16_t));
 }
 
+<<<<<<< HEAD
 // Convert PCM32 to PCM16
 void convert_pcm32_to_pcm16(const uint8_t* input_data, int byte_count, std::vector<uint8_t>& output) {
+=======
+void convert_pcm32_to_pcm16(const uint8_t* input_data, const int byte_count, std::vector<uint8_t>& output) {
+>>>>>>> main
     if (byte_count % 4 != 0) {
         throw std::invalid_argument("PCM32 data size must be divisible by 4");
     }
 
+<<<<<<< HEAD
     int sample_count = byte_count / sizeof(int32_t);
     output.resize(sample_count * sizeof(int16_t));
 
@@ -92,10 +99,26 @@ void convert_pcm32_to_pcm16(const uint8_t* input_data, int byte_count, std::vect
 
 // Convert PCM32_FLOAT to PCM16
 void convert_float32_to_pcm16(const uint8_t* input_data, int byte_count, std::vector<uint8_t>& output) {
+=======
+    const int sample_count = byte_count / 4;
+    output.resize(sample_count * 2);
+
+    for (int i = 0; i < sample_count; i++) {
+        int32_t sample32;
+        memcpy(&sample32, input_data + i * 4, 4);
+
+        const int16_t sample16 = sample32 >> 16;
+        memcpy(output.data() + i * 2, &sample16, 2);
+    }
+}
+
+void convert_float32_to_pcm16(const uint8_t* input_data, const int byte_count, std::vector<uint8_t>& output) {
+>>>>>>> main
     if (byte_count % 4 != 0) {
         throw std::invalid_argument("Float32 data size must be divisible by 4");
     }
 
+<<<<<<< HEAD
     int sample_count = byte_count / sizeof(float);
     output.resize(sample_count * sizeof(int16_t));
 
@@ -106,6 +129,19 @@ void convert_float32_to_pcm16(const uint8_t* input_data, int byte_count, std::ve
         // Clamp float to [-1.0, 1.0] and scale to int16 range
         float clamped = std::max(-1.0f, std::min(1.0f, input[i]));
         output_samples[i] = static_cast<int16_t>(clamped * 32767.0f);
+=======
+    const int sample_count = byte_count / 4;
+    output.resize(sample_count * 2);
+
+    for (int i = 0; i < sample_count; i++) {
+        float f;
+        memcpy(&f, input_data + i * 4, 4);
+
+        const float clamped = std::max(-1.0f, std::min(1.0f, f));
+        const int16_t s = static_cast<int16_t>(clamped * FLOAT_TO_INT16_SCALE);
+
+        memcpy(output.data() + i * 2, &s, 2);
+>>>>>>> main
     }
 }
 
