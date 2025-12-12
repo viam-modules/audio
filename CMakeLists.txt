@@ -24,6 +24,7 @@ find_package(viam-cpp-sdk REQUIRED)
 find_package(Threads REQUIRED)
 find_package(PkgConfig REQUIRED)
 find_package(libmp3lame REQUIRED)
+find_package(soxr REQUIRED)
 
 pkg_check_modules(PORTAUDIO REQUIRED portaudio-2.0)
 
@@ -55,6 +56,7 @@ PRIVATE Threads::Threads
 PRIVATE viam-cpp-sdk::viamsdk
 PRIVATE ${PORTAUDIO_STATIC_LIB}
 PRIVATE libmp3lame::libmp3lame
+PRIVATE soxr::soxr
 )
 
 # Link platform-specific dependencies

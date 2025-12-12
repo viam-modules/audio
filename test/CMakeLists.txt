@@ -29,6 +29,7 @@ function(audio_add_gtest SOURCE_FILE_NAME)
         viam-cpp-sdk::viamsdk
         ${PORTAUDIO_STATIC_LIB}
         libmp3lame::libmp3lame
+        soxr::soxr
     )
 
     # Link platform-specific dependencies for portaudio

@@ -9,6 +9,7 @@
 #include "audio_codec.hpp"
 #include "audio_utils.hpp"
 #include "mp3_decoder.hpp"
+#include "resample.hpp"
 
 namespace speaker {
 namespace vsdk = ::viam::sdk;
@@ -98,7 +99,6 @@ std::vector<std::string> Speaker::validate(vsdk::ResourceConfig cfg) {
             throw std::invalid_argument("device_name attribute must be a string");
         }
     }
-
     if (attrs.count("latency")) {
         if (!attrs["latency"].is_a<double>()) {
             VIAM_SDK_LOG(error) << "[validate] latency attribute must be a number";
@@ -110,7 +110,6 @@ std::vector<std::string> Speaker::validate(vsdk::ResourceConfig cfg) {
             throw std::invalid_argument("latency must be non-negative");
         }
     }
-
     if (attrs.count("sample_rate")) {
         if (!attrs["sample_rate"].is_a<double>()) {
             VIAM_SDK_LOG(error) << "[validate] sample_rate attribute must be a number";
@@ -197,20 +196,29 @@ void Speaker::play(std::vector<uint8_t> const& audio_data,
             throw std::invalid_argument("Unsupported codec for playback");
     }
 
+    int speaker_sample_rate;
+
     // Validate decoded audio properties match speaker configuration
     {
         std::lock_guard<std::mutex> lock(stream_mu_);
-        if (audio_sample_rate != sample_rate_) {
-            VIAM_SDK_LOG(error) << "Sample rate mismatch: speaker=" << sample_rate_ << "Hz, decoded audio=" << audio_sample_rate << "Hz";
-            throw std::invalid_argument("Sample rate mismatch: speaker=" + std::to_string(sample_rate_) +
-                                        "Hz, decoded audio=" + std::to_string(audio_sample_rate) + "Hz");
-        }
+        speaker_sample_rate = sample_rate_;
         if (audio_num_channels != num_channels_) {
             VIAM_SDK_LOG(error) << "Channel mismatch: speaker=" << num_channels_ << " channels, decoded audio=" << audio_num_channels
                                 << " channels";
             throw std::invalid_argument("Channel mismatch: speaker=" + std::to_string(num_channels_) +
                                         " channels, decoded audio=" + std::to_string(audio_num_channels) + " channels");
         }
+    }
+
+    if (audio_sample_rate != speaker_sample_rate) {
+        VIAM_SDK_LOG(debug) << "Sample rate mismatch: speaker is configured for " << speaker_sample_rate << "Hz but audio is "
+                            << audio_sample_rate << "Hz, resampling audio";
+
+        std::vector<uint8_t> resampled_data;
+        resample_audio(audio_sample_rate, speaker_sample_rate, audio_num_channels, decoded_data, resampled_data);
+
+        // Replace with resampled data
+        decoded_data = std::move(resampled_data);
     }
 
     // Convert uint8_t bytes to int16_t samples
