@@ -211,7 +211,7 @@ void Speaker::play(std::vector<uint8_t> const& audio_data,
     }
 
     if (audio_sample_rate != speaker_sample_rate) {
-        VIAM_SDK_LOG(debug) << "Sample rate mismatch: speaker is configured for " << speaker_sample_rate << "Hz but audio is "
+        VIAM_SDK_LOG(info) << "Sample rate mismatch: speaker is configured for " << speaker_sample_rate << "Hz but audio is "
                             << audio_sample_rate << "Hz, resampling audio";
 
         std::vector<uint8_t> resampled_data;
