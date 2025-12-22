@@ -88,7 +88,6 @@ class StreamGuard {
 
 Microphone::Microphone(viam::sdk::Dependencies deps, viam::sdk::ResourceConfig cfg, audio::portaudio::PortAudioInterface* pa)
     : viam::sdk::AudioIn(cfg.name()), stream_(nullptr), pa_(pa), active_streams_(0) {
-
 #ifdef __APPLE__
     if (geteuid() == 0) {
         std::ostringstream error_msg;
