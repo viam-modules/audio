@@ -3,9 +3,9 @@ BIN := build-conan/build/RelWithDebInfo/audio-module
 
 DOCKER_REGISTRY := ghcr.io
 DOCKER_IMAGE := viam-modules/audio/viam-audio
-DOCKER_VERSION := $(shell grep -oP 'viam-audio:\K[0-9]+\.[0-9]+\.[0-9]+' Dockerfile | head -1 || echo "latest")
+DOCKER_VERSION ?= latest
 
-.PHONY: build setup test clean lint conan-pkg docker-arm64-ci
+.PHONY: build setup test clean lint conan-pkg docker
 
 default: module.tar.gz
 
@@ -46,8 +46,7 @@ module.tar.gz: conan-pkg meta.json
 lint:
 	./bin/lint.sh
 
-# Docker target for CI
-docker-arm64-ci:
+docker:
 	docker build --platform linux/arm64 \
 		-t $(DOCKER_REGISTRY)/$(DOCKER_IMAGE):$(DOCKER_VERSION) \
 		-t $(DOCKER_REGISTRY)/$(DOCKER_IMAGE):latest \

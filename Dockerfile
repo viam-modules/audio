@@ -1,6 +1,5 @@
 # This Dockerfile is automatically built and published by CI when changed on main branch
 # See .github/workflows/docker-publish.yml
-# Version: 0.0.2 (update this to trigger new build)
 
 FROM ubuntu:jammy
 
