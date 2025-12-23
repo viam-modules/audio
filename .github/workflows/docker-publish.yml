@@ -16,7 +16,7 @@ jobs:
       contents: read
       packages: write
     timeout-minutes: 45
-    runs-on: buildjet-16vcpu-ubuntu-2204-arm
+    runs-on: ubuntu-latest
 
     steps:
       - name: Login to GitHub Container Registry
