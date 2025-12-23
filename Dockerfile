@@ -46,3 +46,6 @@ RUN apt-get -y --no-install-recommends install \
     python3.10-venv \
     python3-pip
 
+
+RUN python3 -m pip install conan
+RUN conan profile detect
